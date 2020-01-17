@@ -46,6 +46,251 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
             #point_to_test = np.tile(np.array([0.0, 0.54, 1.0, -8.0, -13.39, 2.0, 0.5]),i+1)
             #print(PTA.summary())
 
+    #fisher updating every n_fish_update step
+    n_fish_update = 200 #50
+    #print out status every n_status_update step
+    n_status_update = 10
+
+    #setting up temperature ladder
+    if T_ladder is None:
+        #using geometric spacing
+        c = T_max**(1.0/(n_chain-1))
+        Ts = c**np.arange(n_chain)
+        print("Using {0} temperature chains with a geometric spacing of {1:.3f}.\
+ Temperature ladder is:\n".format(n_chain,c),Ts)
+    else:
+        Ts = np.array(T_ladder)
+        n_chain = Ts.size
+        print("Using {0} temperature chains with custom spacing: ".format(n_chain),Ts)
+
+    #printitng out the prior used on GWB on/off
+    if include_gwb:
+        print("Prior on GWB on/off: {0}%".format(gwb_on_prior*100))
+
+    #set up and print out prior on number of wavelets
+    if max_n_wavelet!=0:
+        if n_wavelet_prior=='flat':
+            n_wavelet_prior = np.ones(max_n_wavelet+1)/(max_n_wavelet+1)
+        else:
+            n_wavelet_prior = np.array(n_wavelet_prior)
+            n_wavelet_norm = np.sum(n_wavelet_prior)
+            n_wavelet_prior *= 1.0/n_wavelet_norm
+        print("Prior on number of wavelets: ", n_wavelet_prior)
+
+    #setting up array for the samples
+    num_params = max_n_wavelet*8+1
+    if include_gwb:
+        num_params += 1
+
+    num_noise_params = 0
+    if vary_white_noise:
+        num_noise_params += len(pulsars)
+    if vary_rn:
+        num_noise_params += 2
+
+    num_params += num_noise_params
+    print(num_params)
+    print(num_noise_params)
+
+    samples = np.zeros((n_chain, N, num_params))
+
+    #filling first sample with random draw
+    for j in range(n_chain):
+        if n_wavelet_start is 'random':
+            n_wavelet = np.random.choice(max_n_wavelet+1)
+        else:
+            n_wavelet = n_wavelet_start
+        samples[j,0,0] = n_wavelet
+        print(n_wavelet)
+        if n_wavelet!=0:
+            samples[j,0,1:n_wavelet*8+1] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[:n_wavelet*8])
+        if vary_white_noise:
+            samples[j,0,max_n_wavelet*8+1:max_n_wavelet*8+1+len(pulsars)] = np.ones(len(pulsars))*efac_start
+        if vary_rn:
+            samples[j,0,max_n_wavelet*8+1+len(pulsars):max_n_wavelet*8+1+num_noise_params] = np.array([ptas[n_wavelet][0].params[n_wavelet*8+num_noise_params-2].sample(), ptas[n_wavelet][0].params[n_wavelet*8+num_noise_params-1].sample()])
+        if include_gwb:
+            samples[j,0,max_n_wavelet*8+1+num_noise_params] = ptas[n_wavelet][1].params[n_wavelet*8+num_noise_params].sample()
+    print(samples[0,0,:])
+    print(np.delete(samples[0,0,1:], range(n_wavelet*8,max_n_wavelet*8)))
+    print(ptas[int(samples[0,0,0])][0].get_lnlikelihood(np.delete(samples[0,0,1:], range(n_wavelet*8,max_n_wavelet*8))))
+
+    #setting up array for the fisher eigenvalues
+    #one for wavelet parameters which we will keep updating
+    eig = np.ones((n_chain, max_n_wavelet, 8, 8))*0.1
+
+    #one for GWB and common rn parameters, which we will keep updating
+    if include_gwb:
+        eig_gwb_rn = np.broadcast_to( np.array([[1.0,0,0], [0,0.3,0], [0,0,0.3]]), (n_chain, 3, 3)).copy()
+    else:
+        eig_gwb_rn = np.broadcast_to( np.array([[1.0,0], [0,0.3]]), (n_chain, 2, 2)).copy()
+
+    #and one for white noise parameters, which we will not update
+    eig_wn = np.broadcast_to(np.eye(len(pulsars))*0.1, (n_chain,len(pulsars), len(pulsars)) ).copy()
+
+    #calculate wn eigenvectors
+    for j in range(n_chain):
+        if include_gwb:
+            wn_eigvec = get_fisher_eigenvectors(np.delete(samples[j,0,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][1], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*8)
+        else:
+            wn_eigvec = get_fisher_eigenvectors(np.delete(samples[j,0,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*8)
+        #print(wn_eigvec)
+        eig_wn[j,:,:] = wn_eigvec[0,:,:]
+
+    #setting up arrays to record acceptance and swaps
+    a_yes=np.zeros(n_chain+2)
+    a_no=np.zeros(n_chain+2)
+    swap_record = []
+    rj_record = []
+
+    #set up probabilities of different proposals
+    total_weight = (regular_weight + PT_swap_weight + tau_scan_proposal_weight +
+                    draw_from_prior_weight + RJ_weight + gwb_switch_weight + noise_jump_weight)
+    swap_probability = PT_swap_weight/total_weight
+    tau_scan_proposal_probability = tau_scan_proposal_weight/total_weight
+    regular_probability = regular_weight/total_weight
+    draw_from_prior_probability = draw_from_prior_weight/total_weight
+    RJ_probability = RJ_weight/total_weight
+    gwb_switch_probability = gwb_switch_weight/total_weight
+    noise_jump_probability = noise_jump_weight/total_weight
+    print("Percentage of steps doing different jumps:\nPT swaps: {0:.2f}%\nRJ moves: {4:.2f}%\nGWB-switches: {5:.2f}%\n\
+Tau-scan-proposals: {1:.2f}%\nJumps along Fisher eigendirections: {2:.2f}%\n\
+Draw from prior: {3:.2f}%\nNoise jump: {6:.2f}%".format(swap_probability*100,
+          tau_scan_proposal_probability*100, regular_probability*100, draw_from_prior_probability*100,
+          RJ_probability*100, gwb_switch_probability*100, noise_jump_probability*100))
+
+
+    return ptas
+
+
+################################################################################
+#
+#FISHER EIGENVALUE CALCULATION
+#
+################################################################################
+def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=7, offset=0, use_prior=False):
+    n_source=n_wavelet
+    fisher = np.zeros((n_source,dim,dim))
+    eig = []
+
+    #print(params)
+
+    #lnlikelihood at specified point
+    if use_prior:
+        nn = pta.get_lnlikelihood(params) + pta.get_lnprior(params)
+    else:
+        nn = pta.get_lnlikelihood(params)
+    
+    
+    for k in range(n_source):
+        #print(k)
+        #calculate diagonal elements
+        for i in range(dim):
+            #create parameter vectors with +-epsilon in the ith component
+            paramsPP = np.copy(params)
+            paramsMM = np.copy(params)
+            paramsPP[offset+i+k*dim] += 2*epsilon
+            paramsMM[offset+i+k*dim] -= 2*epsilon
+            #print(paramsPP)
+            
+            #lnlikelihood at +-epsilon positions
+            if use_prior:
+                pp = pta.get_lnlikelihood(paramsPP) + pta.get_lnprior(paramsPP)
+                mm = pta.get_lnlikelihood(paramsMM) + pta.get_lnprior(paramsMM)
+            else:
+                pp = pta.get_lnlikelihood(paramsPP)
+                mm = pta.get_lnlikelihood(paramsMM)
+
+            #print(pp, nn, mm)
+            
+            #calculate diagonal elements of the Hessian from a central finite element scheme
+            #note the minus sign compared to the regular Hessian
+            #print('diagonal')
+            #print(pp,nn,mm)
+            #print(-(pp - 2.0*nn + mm)/(4.0*epsilon*epsilon))
+            fisher[k,i,i] = -(pp - 2.0*nn + mm)/(4.0*epsilon*epsilon)
+
+        #calculate off-diagonal elements
+        for i in range(dim):
+            for j in range(i+1,dim):
+                #create parameter vectors with ++, --, +-, -+ epsilon in the ith and jth component
+                paramsPP = np.copy(params)
+                paramsMM = np.copy(params)
+                paramsPM = np.copy(params)
+                paramsMP = np.copy(params)
+
+                paramsPP[offset+i+k*dim] += epsilon
+                paramsPP[offset+j+k*dim] += epsilon
+                paramsMM[offset+i+k*dim] -= epsilon
+                paramsMM[offset+j+k*dim] -= epsilon
+                paramsPM[offset+i+k*dim] += epsilon
+                paramsPM[offset+j+k*dim] -= epsilon
+                paramsMP[offset+i+k*dim] -= epsilon
+                paramsMP[offset+j+k*dim] += epsilon
+
+                #lnlikelihood at those positions
+                if use_prior:
+                    pp = pta.get_lnlikelihood(paramsPP) + pta.get_lnprior(paramsPP)
+                    mm = pta.get_lnlikelihood(paramsMM) + pta.get_lnprior(paramsMM)
+                    pm = pta.get_lnlikelihood(paramsPM) + pta.get_lnprior(paramsPM)
+                    mp = pta.get_lnlikelihood(paramsMP) + pta.get_lnprior(paramsMP)
+                else:
+                    pp = pta.get_lnlikelihood(paramsPP)
+                    mm = pta.get_lnlikelihood(paramsMM)
+                    pm = pta.get_lnlikelihood(paramsPM)
+                    mp = pta.get_lnlikelihood(paramsMP)
+
+                #calculate off-diagonal elements of the Hessian from a central finite element scheme
+                #note the minus sign compared to the regular Hessian
+                #print('off-diagonal')
+                #print(pp,mp,pm,mm)
+                #print(-(pp - mp - pm + mm)/(4.0*epsilon*epsilon))
+                fisher[k,i,j] = -(pp - mp - pm + mm)/(4.0*epsilon*epsilon)
+                fisher[k,j,i] = -(pp - mp - pm + mm)/(4.0*epsilon*epsilon)
+        
+        #print(fisher)
+        #correct for the given temperature of the chain    
+        fisher = fisher/T_chain
+      
+        try:
+            #Filter nans and infs and replace them with 1s
+            #this will imply that we will set the eigenvalue to 100 a few lines below
+            FISHER = np.where(np.isfinite(fisher[k,:,:]), fisher[k,:,:], 1.0)
+            if not np.array_equal(FISHER, fisher[k,:,:]):
+                print("Changed some nan elements in the Fisher matrix to 1.0")
+
+            #Find eigenvalues and eigenvectors of the Fisher matrix
+            w, v = np.linalg.eig(FISHER)
+
+            #filter w for eigenvalues smaller than 100 and set those to 100 -- Neil's trick
+            eig_limit = 1.0
+
+            W = np.where(np.abs(w)>eig_limit, w, eig_limit)
+            #print(W)
+            #print(np.sum(v**2, axis=0))
+            #if T_chain==1.0: print(W)
+            #if T_chain==1.0: print(v)
+
+            eig.append( (np.sqrt(1.0/np.abs(W))*v).T )
+            #print(np.sum(eig**2, axis=1))
+            #if T_chain==1.0: print(eig)
+
+        except:
+            print("An Error occured in the eigenvalue calculation")
+            eig.append( np.array(False) )
+
+        #import matplotlib.pyplot as plt
+        #plt.figure()
+        #plt.imshow(np.log10(np.abs(np.real(np.array(FISHER)))))
+        #plt.imshow(np.real(np.array(FISHER)))
+        #plt.colorbar()
+        
+        #plt.figure()
+        #plt.imshow(np.log10(np.abs(np.real(np.array(eig)[0,:,:]))))
+        #plt.imshow(np.real(np.array(eig)[0,:,:]))
+        #plt.colorbar()
+    
+    return np.array(eig)
+
 
 ################################################################################
 #
