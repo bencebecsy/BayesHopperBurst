@@ -103,7 +103,9 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         samples[j,0,0] = n_wavelet
         print(n_wavelet)
         if n_wavelet!=0:
-            samples[j,0,1:n_wavelet*8+1] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[:n_wavelet*8])
+            #samples[j,0,1:n_wavelet*8+1] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[:n_wavelet*8])
+            #start from injected parameters for testing
+            samples[j,0,1:n_wavelet*8+1] = np.array([0.0, 1.0, 0.0, -7.522, -5.0, 0.0, 2.738, 0.548])
         if vary_white_noise:
             samples[j,0,max_n_wavelet*8+1:max_n_wavelet*8+1+len(pulsars)] = np.ones(len(pulsars))*efac_start
         if vary_rn:
@@ -144,22 +146,273 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
 
     #set up probabilities of different proposals
     total_weight = (regular_weight + PT_swap_weight + tau_scan_proposal_weight +
-                    draw_from_prior_weight + RJ_weight + gwb_switch_weight + noise_jump_weight)
+                    RJ_weight + gwb_switch_weight + noise_jump_weight)
     swap_probability = PT_swap_weight/total_weight
     tau_scan_proposal_probability = tau_scan_proposal_weight/total_weight
     regular_probability = regular_weight/total_weight
-    draw_from_prior_probability = draw_from_prior_weight/total_weight
     RJ_probability = RJ_weight/total_weight
     gwb_switch_probability = gwb_switch_weight/total_weight
     noise_jump_probability = noise_jump_weight/total_weight
-    print("Percentage of steps doing different jumps:\nPT swaps: {0:.2f}%\nRJ moves: {4:.2f}%\nGWB-switches: {5:.2f}%\n\
-Tau-scan-proposals: {1:.2f}%\nJumps along Fisher eigendirections: {2:.2f}%\n\
-Draw from prior: {3:.2f}%\nNoise jump: {6:.2f}%".format(swap_probability*100,
-          tau_scan_proposal_probability*100, regular_probability*100, draw_from_prior_probability*100,
+    print("Percentage of steps doing different jumps:\nPT swaps: {0:.2f}%\nRJ moves: {3:.2f}%\nGWB-switches: {4:.2f}%\n\
+Tau-scan-proposals: {1:.2f}%\nJumps along Fisher eigendirections: {2:.2f}%\nNoise jump: {5:.2f}%".format(swap_probability*100,
+          tau_scan_proposal_probability*100, regular_probability*100,
           RJ_probability*100, gwb_switch_probability*100, noise_jump_probability*100))
 
+    for i in range(int(N-1)):
+        ########################################################
+        #
+        #print out run state every n_status_update iterations
+        #
+        ########################################################
+        if i%n_status_update==0:
+            acc_fraction = a_yes/(a_no+a_yes)
+            if jupyter_notebook:
+                print('Progress: {0:2.2f}% '.format(i/N*100) +
+                      'Acceptance fraction (RJ, swap, each chain): ({0:1.2f}, {1:1.2f}, '.format(acc_fraction[0], acc_fraction[1]) +
+                      ', '.join(['{{{}:1.2f}}'.format(i) for i in range(n_chain)]).format(*acc_fraction[2:]) +
+                      ')' + '\r',end='')
+            else:
+                print('Progress: {0:2.2f}% '.format(i/N*100) +
+                      'Acceptance fraction (RJ, swap, each chain): ({0:1.2f}, {1:1.2f}, '.format(acc_fraction[0], acc_fraction[1]) +
+                      ', '.join(['{{{}:1.2f}}'.format(i) for i in range(n_chain)]).format(*acc_fraction[2:]) + ')')
+        #################################################################################
+        #
+        #update our eigenvectors from the fisher matrix every n_fish_update iterations
+        #
+        #################################################################################
+        if i%n_fish_update==0:
+            #only update T>1 chains every 10th time
+            if i%(n_fish_update*10)==0:
+                for j in range(n_chain):
+                    n_wavelet = int(np.copy(samples[j,i,0]))
+                    if n_wavelet!=0:
+                        if include_gwb:
+                            gwb_on = int(samples[j,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+                            eigvec_rn = get_fisher_eigenvectors(np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*8+len(pulsars))
+                        else:
+                            gwb_on = 0
+                            eigvec_rn = get_fisher_eigenvectors(np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*8+len(pulsars))
+                        eigenvectors = get_fisher_eigenvectors(np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][gwb_on], T_chain=Ts[j], n_wavelet=n_wavelet)
+                        if np.all(eigenvectors):
+                            eig[j,:n_wavelet,:,:] = eigenvectors
+                        if np.all(eigvec_rn):
+                            eig_gwb_rn[j,:,:] = eigvec_rn[0,:,:]
+                    else:
+                        if include_gwb:
+                            gwb_on = int(samples[j,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+                            eigvec_rn = get_fisher_eigenvectors(np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*8+len(pulsars))
+                        else:
+                            eigvec_rn = get_fisher_eigenvectors(np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*8+len(pulsars))
+                        #check if eigenvector calculation was succesful
+                        #if not, we just keep the initialized eig full of 0.1 values
+                        if np.all(eigvec_rn):
+                            eig_gwb_rn[j,:,:] = eigvec_rn[0,:,:]
+            elif samples[0,i,0]!=0:
+                n_wavelet = int(np.copy(samples[0,i,0]))
+                if include_gwb:
+                    gwb_on = int(samples[0,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+                else:
+                    gwb_on = 0
+                eigenvectors = get_fisher_eigenvectors(np.delete(samples[0,i,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][gwb_on], T_chain=Ts[0], n_wavelet=n_wavelet)
+                #check if eigenvector calculation was succesful
+                #if not, we just keep the initialized eig full of 0.1 values              
+                if np.all(eigenvectors):
+                    eig[0,:n_wavelet,:,:] = eigenvectors
+        ###########################################################
+        #
+        #Do the actual MCMC step
+        #
+        ###########################################################
+        #draw a random number to decide which jump to do
+        jump_decide = np.random.uniform()
+        #PT swap move
+        if jump_decide<swap_probability:
+            do_pt_swap(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, swap_record, vary_white_noise, include_gwb, num_noise_params)
+        #global proposal based on tau_scan
+        elif jump_decide<swap_probability+tau_scan_proposal_probability:
+            do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan)
+        #do RJ move
+        elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability):
+            do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan)
+        #do GWB switch move
+        elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability+gwb_switch_probability):
+            gwb_switch_move(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, gwb_on_prior, gwb_log_amp_range)
+        #do noise jump
+        elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability+gwb_switch_probability+noise_jump_probability):
+            noise_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, eig_wn, include_gwb, num_noise_params, vary_white_noise)
+        #regular step
+        else:
+            regular_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, eig, eig_gwb_rn, include_gwb, num_noise_params, vary_rn)
 
-    return ptas
+
+    acc_fraction = a_yes/(a_no+a_yes)
+    return samples, acc_fraction, swap_record, rj_record, ptas
+
+################################################################################
+#
+#REGULAR MCMC JUMP ROUTINE (JUMPING ALONG EIGENDIRECTIONS IN CW, GWB AND RN PARAMETERS)
+#
+################################################################################
+
+def regular_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, eig, eig_gwb_rn, include_gwb, num_noise_params, vary_rn):
+    for j in range(n_chain):
+        n_wavelet = int(np.copy(samples[j,i,0]))
+
+        if include_gwb:
+            gwb_on = int(samples[j,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+        else:
+            gwb_on = 0
+
+        samples_current = np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8))
+
+        #decide if moving in wavelet parameters or GWB/RN parameters
+        #case #1: we can vary both
+        if n_wavelet!=0 and (gwb_on==1 or vary_rn):
+            vary_decide = np.random.uniform()
+            if vary_decide <= 0.5:
+                what_to_vary = 'WAVE'
+            else:
+                what_to_vary = 'GWB'
+        #case #2: we can only vary wavelet parameters
+        elif n_wavelet!=0:
+            what_to_vary = 'WAVE'
+        #case #3: we can only vary GWB or RN
+        elif gwb_on==1 or vary_rn:
+            what_to_vary = 'GWB'
+        #case #4: nothing to vary
+        else:
+            samples[j,i+1,:] = samples[j,i,:]
+            a_no[j+2]+=1
+            #print("Nothing to vary!")
+            continue
+
+        if what_to_vary == 'WAVE':
+            wavelet_select = np.random.randint(n_wavelet)
+            jump_select = np.random.randint(8)
+            jump_1wavelet = eig[j,wavelet_select,jump_select,:]
+            jump = np.array([jump_1wavelet[int(i-wavelet_select*8)] if i>=wavelet_select*8 and i<(wavelet_select+1)*8 else 0.0 for i in range(samples_current.size)])
+            #print('cw')
+            #print(jump)
+        elif what_to_vary == 'GWB':
+            if include_gwb:
+                jump_select = np.random.randint(3)
+            else:
+                jump_select = np.random.randint(2)
+            jump_gwb = eig_gwb_rn[j,jump_select,:]
+            if gwb_on==0 and include_gwb:
+                jump_gwb[-1] = 0
+            if include_gwb:
+                jump = np.array([jump_gwb[int(i-n_wavelet*8-len(ptas[n_wavelet][gwb_on].pulsars))] if i>=n_wavelet*8+len(ptas[n_wavelet][gwb_on].pulsars) and i<n_wavelet*8+num_noise_params+1 else 0.0 for i in range(samples_current.size)])
+            else:
+                jump = np.array([jump_gwb[int(i-n_wavelet*8-len(ptas[n_wavelet][gwb_on].pulsars))] if i>=n_wavelet*8+len(ptas[n_wavelet][gwb_on].pulsars) and i<n_wavelet*8+num_noise_params else 0.0 for i in range(samples_current.size)])
+            #if j==0: print('gwb+rn')
+            #if j==0: print(i)
+            #if j==0: print(jump)
+        new_point = samples_current + jump*np.random.normal()
+
+        log_acc_ratio = ptas[n_wavelet][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+        log_acc_ratio += ptas[n_wavelet][gwb_on].get_lnprior(new_point)
+        log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+        log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnprior(samples_current)
+
+        acc_ratio = np.exp(log_acc_ratio)
+        #if j==0: print(acc_ratio)
+        if np.random.uniform()<=acc_ratio:
+            #if j==0: print("ohh jeez")
+            samples[j,i+1,0] = n_wavelet
+            samples[j,i+1,1:n_wavelet*8+1] = new_point[:n_wavelet*8]
+            samples[j,i+1,max_n_wavelet*8+1:] = new_point[n_wavelet*8:]
+            a_yes[j+2]+=1
+        else:
+            samples[j,i+1,:] = samples[j,i,:]
+            a_no[j+2]+=1
+
+
+################################################################################
+#
+#PARALLEL TEMPERING SWAP JUMP ROUTINE
+#
+################################################################################
+def do_pt_swap(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, swap_record, vary_white_noise, include_gwb, num_noise_params):
+    swap_chain = np.random.randint(n_chain-1)
+
+    n_wavelet1 = int(np.copy(samples[swap_chain,i,0]))
+    n_wavelet2 = int(np.copy(samples[swap_chain+1,i,0]))
+
+    if include_gwb:
+        gwb_on1 = int(samples[swap_chain,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+        gwb_on2 = int(samples[swap_chain+1,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+    else:
+        gwb_on1 = 0
+        gwb_on2 = 0
+
+    samples_current1 = np.delete(samples[swap_chain,i,1:], range(n_wavelet1*8,max_n_wavelet*8))
+    samples_current2 = np.delete(samples[swap_chain+1,i,1:], range(n_wavelet2*8,max_n_wavelet*8))
+
+    log_acc_ratio = -ptas[n_wavelet1][gwb_on1].get_lnlikelihood(samples_current1) / Ts[swap_chain]
+    log_acc_ratio += -ptas[n_wavelet2][gwb_on2].get_lnlikelihood(samples_current2) / Ts[swap_chain+1]
+    log_acc_ratio += ptas[n_wavelet2][gwb_on2].get_lnlikelihood(samples_current2) / Ts[swap_chain]
+    log_acc_ratio += ptas[n_wavelet1][gwb_on1].get_lnlikelihood(samples_current1) / Ts[swap_chain+1]
+
+    acc_ratio = np.exp(log_acc_ratio)
+    if np.random.uniform()<=acc_ratio:
+        for j in range(n_chain):
+            if j==swap_chain:
+                samples[j,i+1,:] = samples[j+1,i,:]
+            elif j==swap_chain+1:
+                samples[j,i+1,:] = samples[j-1,i,:]
+            else:
+                samples[j,i+1,:] = samples[j,i,:]
+        a_yes[1]+=1
+        swap_record.append(swap_chain)
+    else:
+        for j in range(n_chain):
+            samples[j,i+1,:] = samples[j,i,:]
+        a_no[1]+=1
+
+################################################################################
+#
+#NOISE MCMC JUMP ROUTINE (JUMPING ALONG EIGENDIRECTIONS IN WHITE NOISE PARAMETERS)
+#
+################################################################################
+
+def noise_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, eig_wn, include_gwb, num_noise_params, vary_white_noise):
+    for j in range(n_chain):
+        n_wavelet = int(np.copy(samples[j,i,0]))
+
+        if include_gwb:
+            gwb_on = int(samples[j,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+        else:
+            gwb_on = 0
+
+        samples_current = np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8))
+
+        #do the wn jump
+        jump_select = np.random.randint(len(ptas[n_wavelet][gwb_on].pulsars))
+        #print(jump_select)
+        jump_wn = eig_wn[j,jump_select,:]
+        jump = np.array([jump_wn[int(i-n_wavelet*8)] if i>=n_wavelet*8 and i<n_wavelet*8+len(ptas[n_wavelet][gwb_on].pulsars) else 0.0 for i in range(samples_current.size)])
+        #if j==0: print('noise')
+        #if j==0: print(jump)
+
+        new_point = samples_current + jump*np.random.normal()
+
+        log_acc_ratio = ptas[n_wavelet][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+        log_acc_ratio += ptas[n_wavelet][gwb_on].get_lnprior(new_point)
+        log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+        log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnprior(samples_current)
+
+        acc_ratio = np.exp(log_acc_ratio)
+        #if j==0: print(acc_ratio)
+        if np.random.uniform()<=acc_ratio:
+            #if j==0: print("Ohhhh")
+            samples[j,i+1,0] = n_wavelet
+            samples[j,i+1,1:n_wavelet*8+1] = new_point[:n_wavelet*8]
+            samples[j,i+1,max_n_wavelet*8+1:] = new_point[n_wavelet*8:]
+            a_yes[j+2]+=1
+        else:
+            samples[j,i+1,:] = samples[j,i,:]
+            a_no[j+2]+=1
 
 
 ################################################################################
@@ -167,7 +420,7 @@ Draw from prior: {3:.2f}%\nNoise jump: {6:.2f}%".format(swap_probability*100,
 #FISHER EIGENVALUE CALCULATION
 #
 ################################################################################
-def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=7, offset=0, use_prior=False):
+def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=8, offset=0, use_prior=False):
     n_source=n_wavelet
     fisher = np.zeros((n_source,dim,dim))
     eig = []
