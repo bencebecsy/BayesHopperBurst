@@ -16,7 +16,6 @@ from enterprise.signals import gp_signals
 from enterprise.signals import utils
 from enterprise.signals import deterministic_signals
 
-from enterprise_extensions.frequentist import Fe_statistic
 import enterprise_wavelets as models
 
 ################################################################################
