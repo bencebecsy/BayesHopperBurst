@@ -17,6 +17,7 @@ from enterprise.signals import utils
 from enterprise.signals import deterministic_signals
 
 import enterprise_wavelets as models
+import pickle
 
 ################################################################################
 #
@@ -102,9 +103,9 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         samples[j,0,0] = n_wavelet
         print(n_wavelet)
         if n_wavelet!=0:
-            #samples[j,0,1:n_wavelet*8+1] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[:n_wavelet*8])
+            samples[j,0,1:n_wavelet*8+1] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[:n_wavelet*8])
             #start from injected parameters for testing
-            samples[j,0,1:n_wavelet*8+1] = np.array([0.0, 1.0, 0.0, -7.522, -5.0, 0.0, 2.738, 0.548])
+            ####samples[j,0,1:n_wavelet*8+1] = np.array([0.0, 1.0, 0.0, -7.522, -5.0, 0.0, 2.738, 0.548])
         if vary_white_noise:
             samples[j,0,max_n_wavelet*8+1:max_n_wavelet*8+1+len(pulsars)] = np.ones(len(pulsars))*efac_start
         if vary_rn:
@@ -136,6 +137,14 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
             wn_eigvec = get_fisher_eigenvectors(np.delete(samples[j,0,1:], range(n_wavelet*8,max_n_wavelet*8)), ptas[n_wavelet][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*8)
         #print(wn_eigvec)
         eig_wn[j,:,:] = wn_eigvec[0,:,:]
+
+    #read in tau_scan data if we will need it
+    if tau_scan_proposal_weight+RJ_weight>0:
+        if tau_scan_file==None:
+            raise Exception("tau-scan data file is needed for tau-scan global propsals")
+        with open(tau_scan_file, 'rb') as f:
+            tau_scan_data = pickle.load(f)
+            print("Tau-scan data read in successfully!")
 
     #setting up arrays to record acceptance and swaps
     a_yes=np.zeros(n_chain+2)
@@ -229,10 +238,10 @@ Tau-scan-proposals: {1:.2f}%\nJumps along Fisher eigendirections: {2:.2f}%\nNois
             do_pt_swap(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, swap_record, vary_white_noise, include_gwb, num_noise_params)
         #global proposal based on tau_scan
         elif jump_decide<swap_probability+tau_scan_proposal_probability:
-            do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan)
+            do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data)
         #do RJ move
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability):
-            do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan)
+            do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data)
         #do GWB switch move
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability+gwb_switch_probability):
             gwb_switch_move(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, gwb_on_prior, gwb_log_amp_range)
@@ -242,10 +251,127 @@ Tau-scan-proposals: {1:.2f}%\nJumps along Fisher eigendirections: {2:.2f}%\nNois
         #regular step
         else:
             regular_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, eig, eig_gwb_rn, include_gwb, num_noise_params, vary_rn)
+        #print(samples[0,i,:])
 
 
     acc_fraction = a_yes/(a_no+a_yes)
     return samples, acc_fraction, swap_record, rj_record, ptas
+
+################################################################################
+#
+#GLOBAL PROPOSAL BASED ON TAU-SCAN
+#
+################################################################################
+
+def do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data):
+    tau_scan = tau_scan_data['tau_scan']
+    #print(i)
+    tau_scan_limit = 0
+    for TS in tau_scan:
+        TS_max = np.max(TS)
+        if TS_max>tau_scan_limit:
+            tau_scan_limit = TS_max
+    #print(tau_scan_limit)
+
+    taus = tau_scan_data['taus']
+    tau_spacing = taus[1]/taus[0]
+    TAU_list = [taus[0]/np.sqrt(tau_spacing),]
+    for k in range(taus.size):
+        TAU_list.append(taus[k]*np.sqrt(tau_spacing))
+
+    F0_list = tau_scan_data['f0s']
+    T0_list = tau_scan_data['t0s']
+
+    #print(len(tau_scan))
+    #print(taus/(365.25*24*3600))
+    #print(np.array(TAU_list)/(365.25*24*3600))
+
+    #print("------------")
+    #print(tau_scan[0].shape)
+    #print(F0_list[0])
+    #print(T0_list[0])
+
+    for j in range(n_chain):
+        #check if there's any wavelet -- stay at given point of not
+        n_wavelet = int(np.copy(samples[j,i,0]))
+        #print(n_wavelet)
+        if n_wavelet==0:
+            samples[j,i+1,:] = samples[j,i,:]
+            a_no[j+2]+=1
+            #print("No source to vary!")
+            continue
+
+        if include_gwb:
+            gwb_on = int(samples[j,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+        else:
+            gwb_on = 0
+
+        log_f0_max = float(ptas[n_wavelet][gwb_on].params[3]._typename.split('=')[2][:-1])
+        log_f0_min = float(ptas[n_wavelet][gwb_on].params[3]._typename.split('=')[1].split(',')[0])
+        t0_max = float(ptas[n_wavelet][gwb_on].params[6]._typename.split('=')[2][:-1])
+        t0_min = float(ptas[n_wavelet][gwb_on].params[6]._typename.split('=')[1].split(',')[0])
+        tau_max = float(ptas[n_wavelet][gwb_on].params[7]._typename.split('=')[2][:-1])
+        tau_min = float(ptas[n_wavelet][gwb_on].params[7]._typename.split('=')[1].split(',')[0])
+
+        accepted = False
+        while accepted==False:
+            log_f0_new = np.random.uniform(low=log_f0_min, high=log_f0_max)
+            t0_new = np.random.uniform(low=t0_min, high=t0_max)
+            tau_new = np.random.uniform(low=tau_min, high=tau_max)
+
+            tau_idx = np.digitize(tau_new, np.array(TAU_list)/(365.25*24*3600)) - 1
+            f0_idx = np.digitize(10**log_f0_new, np.array(F0_list[tau_idx])) - 1
+            t0_idx = np.digitize(t0_new, np.array(T0_list[tau_idx])/(365.25*24*3600)) - 1
+
+            #print(tau_new, t0_new, 10**log_f0_new)
+            #print(tau_idx, t0_idx, f0_idx)
+
+            tau_scan_new_point = tau_scan[tau_idx][f0_idx, t0_idx]
+            #print(tau_scan_new_point/tau_scan_limit)
+            if np.random.uniform()<(tau_scan_new_point/tau_scan_limit):
+                accepted = True
+                #print("Yeeeh!")
+
+        #randomly select other parameters
+        cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
+        gwphi_new = ptas[-1][gwb_on].params[2].sample()
+        phase0_new = ptas[-1][gwb_on].params[5].sample()
+        epsilon_new = ptas[-1][gwb_on].params[1].sample()
+        log10_h_new = ptas[-1][gwb_on].params[4].sample()
+
+        wavelet_select = np.random.randint(n_wavelet)
+
+        samples_current = np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8))
+        new_point = np.copy(samples_current)
+        new_point[wavelet_select*8:(wavelet_select+1)*8] = np.array([cos_gwtheta_new, epsilon_new, gwphi_new, log_f0_new,
+                                                                     log10_h_new, phase0_new, t0_new, tau_new])
+
+        log_acc_ratio = ptas[n_wavelet][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+        log_acc_ratio += ptas[n_wavelet][gwb_on].get_lnprior(new_point)
+        log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+        log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnprior(samples_current)
+
+        #getting ratio of proposal densities!
+        tau_old = samples[j,i,1+7+wavelet_select*8]
+        f0_old = 10**samples[j,i,1+3+wavelet_select*8]
+        t0_old = samples[j,i,1+6+wavelet_select*8]
+
+        tau_idx_old = np.digitize(tau_old, np.array(TAU_list)/(365.25*24*3600)) - 1
+        f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
+        t0_idx_old = np.digitize(t0_old, np.array(T0_list[tau_idx_old])/(365.25*24*3600)) - 1
+
+        tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
+
+        acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point)
+        if np.random.uniform()<=acc_ratio:
+            samples[j,i+1,0] = n_wavelet
+            samples[j,i+1,1:n_wavelet*8+1] = new_point[:n_wavelet*8]
+            samples[j,i+1,max_n_wavelet*8+1:] = new_point[n_wavelet*8:]
+            a_yes[j+2]+=1
+        else:
+            samples[j,i+1,:] = samples[j,i,:]
+            a_no[j+2]+=1
+
 
 ################################################################################
 #
@@ -622,7 +748,7 @@ def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, incl
         gwphi = parameter.Uniform(0, 2*np.pi)(str(i)+'_'+'gwphi')
         phase0 = parameter.Uniform(0, 2*np.pi)(str(i)+'_'+'phase0')
         epsilon = parameter.Uniform(0, 1.0)(str(i)+'_'+'epsilon')
-        tau = parameter.Uniform(0.1, 5)(str(i)+'_'+'tau')
+        tau = parameter.Uniform(0.2, 5)(str(i)+'_'+'tau')
         t0 = parameter.Uniform(0.0, 10.0)(str(i)+'_'+'t0')
         if wavelet_amp_prior == 'log-uniform':
             log10_h = parameter.Uniform(wavelet_log_amp_range[0], wavelet_log_amp_range[1])(str(i)+'_'+'log10_h')
