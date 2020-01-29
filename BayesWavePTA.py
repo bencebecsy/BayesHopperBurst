@@ -363,7 +363,7 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes,
         tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
         
         log10_h_old = samples[j,i,1+4+wavelet_select*8]
-        hasings_extra_factor = ptas[-1][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][gwb_on].params[4].get_pdf(log10_h_new)
+        hastings_extra_factor = ptas[-1][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][gwb_on].params[4].get_pdf(log10_h_new)
 
         acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * hastings_extra_factor
         if np.random.uniform()<=acc_ratio:
