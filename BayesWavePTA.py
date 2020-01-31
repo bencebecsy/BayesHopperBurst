@@ -103,7 +103,16 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         samples[j,0,0] = n_wavelet
         print(n_wavelet)
         if n_wavelet!=0:
-            samples[j,0,1:n_wavelet*8+1] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[:n_wavelet*8])
+            #making sure all wavelets get the same sky location and ellipticity
+            init_cos_gwtheta = ptas[n_wavelet][0].params[0].sample()
+            init_epsilon = ptas[n_wavelet][0].params[1].sample()
+            init_gwphi = ptas[n_wavelet][0].params[2].sample()
+            for which_wavelet in range(n_wavelet):
+                samples[j,0,1+0+which_wavelet*8] = init_cos_gwtheta
+                samples[j,0,1+1+which_wavelet*8] = init_epsilon
+                samples[j,0,1+2+which_wavelet*8] = init_gwphi
+                #randomly pick other wavelet parameters separately fo each wavelet
+                samples[j,0,1+3+which_wavelet*8:1+8+which_wavelet*8] = np.hstack(p.sample() for p in ptas[n_wavelet][0].params[3:8])
             #start from injected parameters for testing
             ####samples[j,0,1:n_wavelet*8+1] = np.array([0.0, 1.0, 0.0, -7.522, -5.0, 0.0, 2.738, 0.548])
         if vary_white_noise:
@@ -332,18 +341,21 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes,
                 accepted = True
                 #print("Yeeeh!")
 
-        #randomly select other parameters
-        cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
-        gwphi_new = ptas[-1][gwb_on].params[2].sample()
+        #randomly select other parameters (except sky location and epsilon, which we won't change here)
+        #cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
+        cos_gwtheta_old = np.copy(samples[j,i,1+0])
+        #gwphi_new = ptas[-1][gwb_on].params[2].sample()
+        gwphi_old = np.copy(samples[j,i,1+2])
         phase0_new = ptas[-1][gwb_on].params[5].sample()
-        epsilon_new = ptas[-1][gwb_on].params[1].sample()
+        #epsilon_new = ptas[-1][gwb_on].params[1].sample()
+        epsilon_old = np.copy(samples[j,i,1+1])
         log10_h_new = ptas[-1][gwb_on].params[4].sample()
 
         wavelet_select = np.random.randint(n_wavelet)
 
         samples_current = np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8))
         new_point = np.copy(samples_current)
-        new_point[wavelet_select*8:(wavelet_select+1)*8] = np.array([cos_gwtheta_new, epsilon_new, gwphi_new, log_f0_new,
+        new_point[wavelet_select*8:(wavelet_select+1)*8] = np.array([cos_gwtheta_old, epsilon_old, gwphi_old, log_f0_new,
                                                                      log10_h_new, phase0_new, t0_new, tau_new])
 
         log_acc_ratio = ptas[n_wavelet][gwb_on].get_lnlikelihood(new_point)/Ts[j]
@@ -418,7 +430,12 @@ def regular_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes, a_no, eig,
             wavelet_select = np.random.randint(n_wavelet)
             jump_select = np.random.randint(8)
             jump_1wavelet = eig[j,wavelet_select,jump_select,:]
-            jump = np.array([jump_1wavelet[int(i-wavelet_select*8)] if i>=wavelet_select*8 and i<(wavelet_select+1)*8 else 0.0 for i in range(samples_current.size)])
+            jump = np.zeros(samples_current.size)
+            #change intrinsic parameters of selected wavelet
+            jump[wavelet_select*8:(wavelet_select+1)*8] = jump_1wavelet
+            #and change sky location and ellipticity of all wavelets
+            for which_wavelet in range(n_wavelet):
+                jump[which_wavelet*8:which_wavelet*8+3] = jump_1wavelet[:3]
             #print('cw')
             #print(jump)
         elif what_to_vary == 'GWB':
