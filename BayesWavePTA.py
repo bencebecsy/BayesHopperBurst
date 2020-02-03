@@ -123,7 +123,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
             samples[j,0,max_n_wavelet*8+1+num_noise_params] = ptas[n_wavelet][1].params[n_wavelet*8+num_noise_params].sample()
     print(samples[0,0,:])
     print(np.delete(samples[0,0,1:], range(n_wavelet*8,max_n_wavelet*8)))
-    print(ptas[int(samples[0,0,0])][0].get_lnlikelihood(np.delete(samples[0,0,1:], range(n_wavelet*8,max_n_wavelet*8))))
+    print(ptas[int(samples[0,0,0])][0].get_lnlikelihood(np.delete(samples[0,0,1:], range(int(samples[0,0,0])*8,max_n_wavelet*8))))
 
     #setting up array for the fisher eigenvalues
     #one for wavelet parameters which we will keep updating
@@ -265,6 +265,215 @@ Tau-scan-proposals: {1:.2f}%\nJumps along Fisher eigendirections: {2:.2f}%\nNois
 
     acc_fraction = a_yes/(a_no+a_yes)
     return samples, acc_fraction, swap_record, rj_record, ptas
+
+################################################################################
+#
+#REVERSIBLE-JUMP (RJ, aka TRANS-DIMENSIONAL) MOVE -- adding or removing a wavelet
+#
+################################################################################
+def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data):
+    tau_scan = tau_scan_data['tau_scan']
+
+    tau_scan_limit = 0
+    for TS in tau_scan:
+        TS_max = np.max(TS)
+        if TS_max>tau_scan_limit:
+            tau_scan_limit = TS_max
+    
+    taus = tau_scan_data['taus']
+    tau_spacing = taus[1]/taus[0]
+    TAU_list = [taus[0]/np.sqrt(tau_spacing),]
+    for k in range(taus.size):
+        TAU_list.append(taus[k]*np.sqrt(tau_spacing))
+
+    F0_list = tau_scan_data['f0s']
+    T0_list = tau_scan_data['t0s']
+    
+    for j in range(n_chain):
+        n_wavelet = int(np.copy(samples[j,i,0]))
+        #if j==0: print(n_wavelet)
+
+        if include_gwb:
+            gwb_on = int(samples[j,i,max_n_wavelet*8+1+num_noise_params]!=0.0)
+        else:
+            gwb_on = 0
+
+        add_prob = 0.5 #same propability of addind and removing
+        #decide if we add or remove a signal
+        direction_decide = np.random.uniform()
+        if n_wavelet==0 or (direction_decide<add_prob and n_wavelet!=max_n_wavelet): #adding a wavelet------------------------------------------------------
+            if j==0: rj_record.append(1)
+            #if j==0: print("Propose to add a wavelet")
+
+            log_f0_max = float(ptas[-1][gwb_on].params[3]._typename.split('=')[2][:-1])
+            log_f0_min = float(ptas[-1][gwb_on].params[3]._typename.split('=')[1].split(',')[0])
+            t0_max = float(ptas[-1][gwb_on].params[6]._typename.split('=')[2][:-1])
+            t0_min = float(ptas[-1][gwb_on].params[6]._typename.split('=')[1].split(',')[0])
+            tau_max = float(ptas[-1][gwb_on].params[7]._typename.split('=')[2][:-1])
+            tau_min = float(ptas[-1][gwb_on].params[7]._typename.split('=')[1].split(',')[0])
+
+            accepted = False
+            while accepted==False:
+                log_f0_new = np.random.uniform(low=log_f0_min, high=log_f0_max)
+                t0_new = np.random.uniform(low=t0_min, high=t0_max)
+                tau_new = np.random.uniform(low=tau_min, high=tau_max)
+
+                tau_idx = np.digitize(tau_new, np.array(TAU_list)/(365.25*24*3600)) - 1
+                f0_idx = np.digitize(10**log_f0_new, np.array(F0_list[tau_idx])) - 1
+                t0_idx = np.digitize(t0_new, np.array(T0_list[tau_idx])/(365.25*24*3600)) - 1
+
+                #print(tau_new, t0_new, 10**log_f0_new)
+                #print(tau_idx, t0_idx, f0_idx)
+
+                tau_scan_new_point = tau_scan[tau_idx][f0_idx, t0_idx]
+                #print(tau_scan_new_point/tau_scan_limit)
+                if np.random.uniform()<(tau_scan_new_point/tau_scan_limit):
+                    accepted = True
+                    #print("Yeeeh!")
+
+            #randomly select other parameters
+            log10_h_new = ptas[-1][gwb_on].params[4].sample()
+            phase0_new = ptas[-1][gwb_on].params[5].sample()
+            #if this is the first wavelet, draw sky location and ellipticity too
+            if n_wavelet==0:
+                cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
+                gwphi_new = ptas[-1][gwb_on].params[2].sample()
+                epsilon_new = ptas[-1][gwb_on].params[1].sample()
+            #if this is not the first wavelet, copy sky location and ellipticity from existing wavelet(s)
+            else:
+                cos_gwtheta_new = np.copy(samples[j,i,1+0])
+                gwphi_new = np.copy(samples[j,i,1+2])
+                epsilon_new = np.copy(samples[j,i,1+1])
+
+            prior_ext = (ptas[-1][gwb_on].params[0].get_pdf(cos_gwtheta_new) * ptas[-1][gwb_on].params[1].get_pdf(epsilon_new) *
+                         ptas[-1][gwb_on].params[2].get_pdf(gwphi_new) * ptas[-1][gwb_on].params[4].get_pdf(log10_h_new) * 
+                         ptas[-1][gwb_on].params[5].get_pdf(phase0_new))
+
+            samples_current = np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8))
+
+            new_point = np.delete(samples[j,i,1:], range((n_wavelet+1)*8,max_n_wavelet*8))
+            new_wavelet = np.array([cos_gwtheta_new, epsilon_new, gwphi_new, log_f0_new, log10_h_new, phase0_new, t0_new, tau_new])
+            new_point[n_wavelet*8:(n_wavelet+1)*8] = new_wavelet
+
+            #if j==0:
+            #    print(samples_current)
+            #    print(new_point)
+
+            log_acc_ratio = ptas[(n_wavelet+1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+            log_acc_ratio += ptas[(n_wavelet+1)][gwb_on].get_lnprior(new_point)
+            log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+            log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnprior(samples_current)
+
+            #normalization
+            norm = 0.0
+            for idx, TTT in enumerate(tau_scan):
+                for kk in range(TTT.shape[0]):
+                    for ll in range(TTT.shape[1]):
+                        df = np.log10(F0_list[idx][kk+1]/F0_list[idx][kk])
+                        dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
+                        dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
+                        norm += TTT[kk,ll]*df*dt*dtau
+            #print(norm)
+            
+            tau_scan_new_point_normalized = tau_scan_new_point/norm
+
+            acc_ratio = np.exp(log_acc_ratio)/prior_ext/tau_scan_new_point_normalized
+            #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
+            if n_wavelet==0:
+                acc_ratio *= 0.5
+            if n_wavelet==max_n_wavelet-1:
+                acc_ratio *= 2.0
+            #accounting for n_wavelet prior
+            acc_ratio *= n_wavelet_prior[int(n_wavelet)+1]/n_wavelet_prior[int(n_wavelet)]
+            #if j==0:
+            #    print("Add wavelet")
+            #    print(acc_ratio)
+            #    print(log_acc_ratio)
+            #    print(ptas[(n_wavelet+1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]-ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j])
+            #    print(ptas[(n_wavelet+1)][gwb_on].get_lnprior(new_point)-ptas[n_wavelet][gwb_on].get_lnprior(samples_current))
+            #    print(1/prior_ext)
+            #    print(1/tau_scan_new_point_normalized)
+            #    print(n_wavelet_prior[int(n_wavelet)+1]/n_wavelet_prior[int(n_wavelet)])
+            if np.random.uniform()<=acc_ratio:
+                #if j==0: print("Yeeeh")
+                samples[j,i+1,0] = n_wavelet+1
+                samples[j,i+1,1:(n_wavelet+1)*8+1] = new_point[:(n_wavelet+1)*8]
+                samples[j,i+1,max_n_wavelet*8+1:] = new_point[(n_wavelet+1)*8:]
+                a_yes[0] += 1
+            else:
+                samples[j,i+1,:] = samples[j,i,:]
+                a_no[0] += 1
+
+        elif n_wavelet==max_n_wavelet or (direction_decide>add_prob and n_wavelet!=0):   #removing a wavelet----------------------------------------------------------
+            if j==0: rj_record.append(-1)
+            #if j==0: print("Propose to remove a wavelet")
+            #choose which wavelet to remove
+            remove_index = np.random.randint(n_wavelet)
+
+            samples_current = np.delete(samples[j,i,1:], range(n_wavelet*8,max_n_wavelet*8))
+            new_point = np.delete(samples_current, range(remove_index*8,(remove_index+1)*8))
+
+            log_acc_ratio = ptas[(n_wavelet-1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+            log_acc_ratio += ptas[(n_wavelet-1)][gwb_on].get_lnprior(new_point)
+            log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+            log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnprior(samples_current)
+
+            #getting tau_scan at old point
+            tau_old = samples[j,i,1+7+remove_index*8]
+            f0_old = 10**samples[j,i,1+3+remove_index*8]
+            t0_old = samples[j,i,1+6+remove_index*8]
+
+            tau_idx_old = np.digitize(tau_old, np.array(TAU_list)/(365.25*24*3600)) - 1
+            f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
+            t0_idx_old = np.digitize(t0_old, np.array(T0_list[tau_idx_old])/(365.25*24*3600)) - 1
+
+            tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
+
+            #normalization
+            norm = 0.0
+            for idx, TTT in enumerate(tau_scan):
+                for kk in range(TTT.shape[0]):
+                    for ll in range(TTT.shape[1]):
+                        df = np.log10(F0_list[idx][kk+1]/F0_list[idx][kk])
+                        dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
+                        dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
+                        norm += TTT[kk,ll]*df*dt*dtau
+
+            tau_scan_old_point_normalized = tau_scan_old_point/norm
+
+            #getting external parameter priors
+            log10_h_old = np.copy(samples[j,i,1+4])
+            phase0_old = np.copy(samples[j,i,1+5])
+            cos_gwtheta_old = np.copy(samples[j,i,1+0])
+            gwphi_old = np.copy(samples[j,i,1+2])
+            epsilon_old = np.copy(samples[j,i,1+1])
+
+            prior_ext = (ptas[-1][gwb_on].params[0].get_pdf(cos_gwtheta_old) * ptas[-1][gwb_on].params[1].get_pdf(epsilon_old) *
+                         ptas[-1][gwb_on].params[2].get_pdf(gwphi_old) * ptas[-1][gwb_on].params[4].get_pdf(log10_h_old) *
+                         ptas[-1][gwb_on].params[5].get_pdf(phase0_old))
+
+            acc_ratio = np.exp(log_acc_ratio)*tau_scan_old_point_normalized*prior_ext
+            #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
+            if n_wavelet==1:
+                acc_ratio *= 2.0
+            if n_wavelet==max_n_wavelet:
+                acc_ratio *= 0.5
+            #accounting for n_wavelet prior
+            acc_ratio *= n_wavelet_prior[int(n_wavelet)-1]/n_wavelet_prior[int(n_wavelet)]
+            #if j==0:
+            #    print("Remove wavelet")
+            #    print(acc_ratio)
+            if np.random.uniform()<=acc_ratio:
+                #if j==0: print("Ohhhhhhhhhhhhh")
+                samples[j,i+1,0] = n_wavelet-1
+                samples[j,i+1,1:(n_wavelet-1)*8+1] = new_point[:(n_wavelet-1)*8]
+                samples[j,i+1,max_n_wavelet*8+1:] = new_point[(n_wavelet-1)*8:]
+                a_yes[0] += 1
+            else:
+                samples[j,i+1,:] = samples[j,i,:]
+                a_no[0] += 1
+
+
 
 ################################################################################
 #
