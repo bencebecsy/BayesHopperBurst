@@ -154,6 +154,18 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         with open(tau_scan_file, 'rb') as f:
             tau_scan_data = pickle.load(f)
             print("Tau-scan data read in successfully!")
+        
+        tau_scan = tau_scan_data['tau_scan']
+        
+        taus = tau_scan_data['taus']
+        tau_spacing = taus[1]/taus[0]
+        TAU_list = [taus[0]/np.sqrt(tau_spacing),]
+        for k in range(taus.size):
+            TAU_list.append(taus[k]*np.sqrt(tau_spacing))
+
+        F0_list = tau_scan_data['f0s']
+        T0_list = tau_scan_data['t0s']
+        
         #normalization
         norm = 0.0
         for idx, TTT in enumerate(tau_scan):
