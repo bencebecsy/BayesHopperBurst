@@ -154,6 +154,18 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         with open(tau_scan_file, 'rb') as f:
             tau_scan_data = pickle.load(f)
             print("Tau-scan data read in successfully!")
+        #normalization
+        norm = 0.0
+        for idx, TTT in enumerate(tau_scan):
+            for kk in range(TTT.shape[0]):
+                for ll in range(TTT.shape[1]):
+                    df = np.log10(F0_list[idx][kk+1]/F0_list[idx][kk])
+                    dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
+                    dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
+                    norm += TTT[kk,ll]*df*dt*dtau
+        tau_scan_data['norm'] = norm
+        #print(norm)
+ 
 
     #setting up arrays to record acceptance and swaps
     a_yes=np.zeros(n_chain+2)
@@ -363,19 +375,10 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
             log_acc_ratio += ptas[(n_wavelet+1)][gwb_on].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
             log_acc_ratio += -ptas[n_wavelet][gwb_on].get_lnprior(samples_current)
-
-            #normalization
-            norm = 0.0
-            for idx, TTT in enumerate(tau_scan):
-                for kk in range(TTT.shape[0]):
-                    for ll in range(TTT.shape[1]):
-                        df = np.log10(F0_list[idx][kk+1]/F0_list[idx][kk])
-                        dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
-                        dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
-                        norm += TTT[kk,ll]*df*dt*dtau
-            #print(norm)
+           
             
-            tau_scan_new_point_normalized = tau_scan_new_point/norm
+            #apply normalization
+            tau_scan_new_point_normalized = tau_scan_new_point/tau_scan_data['norm']
 
             acc_ratio = np.exp(log_acc_ratio)/prior_ext/tau_scan_new_point_normalized
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
@@ -429,17 +432,8 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
 
             tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
 
-            #normalization
-            norm = 0.0
-            for idx, TTT in enumerate(tau_scan):
-                for kk in range(TTT.shape[0]):
-                    for ll in range(TTT.shape[1]):
-                        df = np.log10(F0_list[idx][kk+1]/F0_list[idx][kk])
-                        dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
-                        dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
-                        norm += TTT[kk,ll]*df*dt*dtau
-
-            tau_scan_old_point_normalized = tau_scan_old_point/norm
+            #apply normalization
+            tau_scan_old_point_normalized = tau_scan_old_point/tau_scan_data['norm']
 
             #getting external parameter priors
             log10_h_old = np.copy(samples[j,i,1+4])
