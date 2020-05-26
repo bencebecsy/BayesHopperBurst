@@ -175,7 +175,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
                     dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
                     dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
                     norm += TTT[kk,ll]*df*dt*dtau
-        tau_scan_data['norm'] = norm
+        tau_scan_data['norm'] = norm #TODO: Implement some check to make sure this is normalized over the same range as the prior range used in the MCMC
         #print(norm)
  
 
@@ -403,6 +403,7 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
             #if j==0:
             #    print("Add wavelet")
             #    print(acc_ratio)
+            #    print(np.exp(log_acc_ratio)/prior_ext/ptas[-1][gwb_on].params[3].get_pdf(log_f0_new)/ptas[-1][gwb_on].params[6].get_pdf(t0_new)/ptas[-1][gwb_on].params[7].get_pdf(tau_new))
             #    print(log_acc_ratio)
             #    print(ptas[(n_wavelet+1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]-ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j])
             #    print(ptas[(n_wavelet+1)][gwb_on].get_lnprior(new_point)-ptas[n_wavelet][gwb_on].get_lnprior(samples_current))
@@ -448,17 +449,32 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
             tau_scan_old_point_normalized = tau_scan_old_point/tau_scan_data['norm']
 
             #getting external parameter priors
-            log10_h_old = np.copy(samples[j,i,1+4])
-            phase0_old = np.copy(samples[j,i,1+5])
-            cos_gwtheta_old = np.copy(samples[j,i,1+0])
-            gwphi_old = np.copy(samples[j,i,1+2])
-            epsilon_old = np.copy(samples[j,i,1+1])
+            log10_h_old = np.copy(samples[j,i,1+4+remove_index*8])
+            phase0_old = np.copy(samples[j,i,1+5+remove_index*8])
+            cos_gwtheta_old = np.copy(samples[j,i,1+0+remove_index*8])
+            gwphi_old = np.copy(samples[j,i,1+2+remove_index*8])
+            epsilon_old = np.copy(samples[j,i,1+1+remove_index*8])
+
+            #if j==0:
+            #    print("---")
+            #    print("cos_theta: ", cos_gwtheta_old)
+            #    print("epsilon: ", epsilon_old)
+            #    print("phi: ", gwphi_old)
+            #    print("f0: ", f0_old)
+            #    print("log10h: ", log10_h_old)
+            #    print("phase0: ", phase0_old)
+            #    print("t0: ", t0_old)
+            #    print("tau: ", tau_old)
+            #    print(samples_current)
+            #    print(new_point)
+            #    print("---")
+                
 
             prior_ext = (ptas[-1][gwb_on].params[0].get_pdf(cos_gwtheta_old) * ptas[-1][gwb_on].params[1].get_pdf(epsilon_old) *
                          ptas[-1][gwb_on].params[2].get_pdf(gwphi_old) * ptas[-1][gwb_on].params[4].get_pdf(log10_h_old) *
                          ptas[-1][gwb_on].params[5].get_pdf(phase0_old))
 
-            acc_ratio = np.exp(log_acc_ratio)*tau_scan_old_point_normalized*prior_ext
+            acc_ratio = np.exp(log_acc_ratio)*prior_ext*tau_scan_old_point_normalized
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
             if n_wavelet==1:
                 acc_ratio *= 2.0
@@ -469,6 +485,13 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
             #if j==0:
             #    print("Remove wavelet")
             #    print(acc_ratio)
+            #    print(np.exp(log_acc_ratio)*prior_ext*ptas[-1][gwb_on].params[3].get_pdf(np.log10(f0_old))*ptas[-1][gwb_on].params[6].get_pdf(t0_old)*ptas[-1][gwb_on].params[7].get_pdf(tau_old))
+            #    print(log_acc_ratio)
+            #    print(ptas[(n_wavelet-1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]-ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)/Ts[j])
+            #    print(ptas[(n_wavelet-1)][gwb_on].get_lnprior(new_point)-ptas[n_wavelet][gwb_on].get_lnprior(samples_current))
+            #    print(1/prior_ext)
+            #    print(1/tau_scan_old_point_normalized)
+            #    print(n_wavelet_prior[int(n_wavelet)-1]/n_wavelet_prior[int(n_wavelet)])
             if np.random.uniform()<=acc_ratio:
                 #if j==0: print("Ohhhhhhhhhhhhh")
                 samples[j,i+1,0] = n_wavelet-1
