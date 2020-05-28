@@ -190,3 +190,79 @@ def make_Nmat(phiinv, TNT, Nvec, T):
     
     #An Ntoa by Ntoa noise matrix to be used in expand dense matrix calculations earlier
     return Ndiag - np.dot(TtN.T,expval2)
+
+
+def make_tau_scan_map(TauScan, n_tau=5, f_min=None, f_max=None, t_min=None, t_max=None, tau_min=None, tau_max=None):
+    """
+        Produce Tau-scan 3D (tau, t0, f0) map
+        
+        :param TauScan: TauScan object used to calculate TauScan at given values of tau, t0, f0
+        :param n_tau: number of tau_slices to do
+        :param f_min: minimum frequency [Hz]
+        :param f_max: maximum frequency [Hz]
+        :param t_min: minimum time [year]
+        :param t_max: maximum time [year]
+        :param tau_min: minimum tau [year]
+        :param tau_max: maximum tau [year]
+        :return: dictionary with the following entries:
+                    'tau_scan': the actual tau scan as a list (for each tau) of 2D (t,f) numpy arrays
+                    'tau_edges': numpy array with the edges of the tau binning used [year]
+                    't0_edges': list (for different taus) of numpy arrays with the edges of the t0 binning used [s]
+                    'f0_edges': list (for different taus) of numpy arrays with the edges of the f0 binning used [Hz]
+        """
+    
+    #check if all prior boundaries are provided
+    if (f_min is None) or (f_max is None) or (t_min is None) or (t_max is None) or (tau_min is None) or (tau_max is None):
+        raise Exception("All 6 boundaries (max and min for f0, t0, tau) are needed to compute tau-scan map")
+
+    #calculate tau bin boundaries to use
+    tau_edges = np.logspace(np.log10(tau_min), np.log10(tau_max), n_tau+1)
+    dtau = tau_edges[1]/tau_edges[0]
+
+    #calculate bin centers
+    taus = []
+    for j in range(tau_edges.size-1):
+        taus.append(tau_edges[j]*np.sqrt(dtau))
+
+    taus = np.array(taus)*24*3600*365.25
+
+    tau_scan = []
+    T0_list = []
+    F0_list = []
+    #loop over different taus
+    for k, tau in enumerate(taus):
+        print(k+1, " / ", taus.size)
+
+        #resolution needed to get some overlap between pixels (TODO: check what value was used for these)
+        f_res = 1 / (np.sqrt(5)*np.pi*tau)
+        N_f = int((f_max-f_min)/f_res)
+        t_res = tau / np.sqrt(5)
+        print(t_res)
+        N_t = int((t_max-t_min)*365.25*24*3600/t_res)
+    
+        print(N_f)
+        print(N_t)
+        print("SUM: ", N_f*N_t)
+        f0_edges = np.linspace(f_min, f_max, N_f+1)
+        t0_edges = np.linspace(t_min, t_max, N_t+1)*365.25*24*3600
+        T0_list.append(t0_edges)
+        F0_list.append(f0_edges)
+        
+        #Calculate bin centers from bin edges
+        f0s = []
+        for i in range(f0_edges.size - 1):
+            f0s.append( (f0_edges[i] + f0_edges[i+1])/2 )
+        
+        t0s = []
+        for i in range(t0_edges.size - 1):
+            t0s.append( (t0_edges[i] + t0_edges[i+1])/2 )
+        
+        #Loop over pixels and calculate tau scan map
+        TS = np.zeros((N_f, N_t))
+        for i, f0 in enumerate(f0s):
+            for j, t0 in enumerate(t0s):
+                COS, SIN = TauScan.compute_TauScan(tau, t0, f0)
+                TS[i,j] = COS**2 + SIN**2
+        tau_scan.append(TS)
+
+    return {'tau_scan':tau_scan, 'tau_edges':tau_edges, 't0_edges':T0_list, 'f0_edges':F0_list}
