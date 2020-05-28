@@ -237,7 +237,6 @@ def make_tau_scan_map(TauScan, n_tau=5, f_min=None, f_max=None, t_min=None, t_ma
         f_res = 1 / (np.sqrt(5)*np.pi*tau)
         N_f = int((f_max-f_min)/f_res)
         t_res = tau / np.sqrt(5)
-        print(t_res)
         N_t = int((t_max-t_min)*365.25*24*3600/t_res)
     
         print(N_f)

@@ -157,14 +157,27 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         
         tau_scan = tau_scan_data['tau_scan']
         
-        taus = tau_scan_data['taus']
-        tau_spacing = taus[1]/taus[0]
-        TAU_list = [taus[0]/np.sqrt(tau_spacing),]
-        for k in range(taus.size):
-            TAU_list.append(taus[k]*np.sqrt(tau_spacing))
+        TAU_list = list(tau_scan_data['tau_edges'])
+        F0_list = tau_scan_data['f0_edges']
+        T0_list = tau_scan_data['t0_edges']
 
-        F0_list = tau_scan_data['f0s']
-        T0_list = tau_scan_data['t0s']
+        #check if same prior range was used
+        log_f0_max = float(ptas[-1][-1].params[3]._typename.split('=')[2][:-1])
+        log_f0_min = float(ptas[-1][-1].params[3]._typename.split('=')[1].split(',')[0])
+        t0_max = float(ptas[-1][-1].params[6]._typename.split('=')[2][:-1])
+        t0_min = float(ptas[-1][-1].params[6]._typename.split('=')[1].split(',')[0])
+        tau_max = float(ptas[-1][-1].params[7]._typename.split('=')[2][:-1])
+        tau_min = float(ptas[-1][-1].params[7]._typename.split('=')[1].split(',')[0])
+
+        print("#"*70)
+        print("Tau-scan and MCMC prior range check (they must be the same)")
+        print("tau_min: ", TAU_list[0], tau_min)
+        print("tau_max: ", TAU_list[-1], tau_max)
+        print("t0_min: ", T0_list[0][0]/3600/24/365.25, t0_min)
+        print("t0_max: ", T0_list[0][-1]/3600/24/365.25, t0_max)
+        print("f0_min: ", F0_list[0][0], 10**log_f0_min)
+        print("f0_max: ", F0_list[0][-1], 10**log_f0_max)
+        print("#"*70)
         
         #normalization
         norm = 0.0
@@ -173,10 +186,10 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
                 for ll in range(TTT.shape[1]):
                     df = np.log10(F0_list[idx][kk+1]/F0_list[idx][kk])
                     dt = (T0_list[idx][ll+1]-T0_list[idx][ll])/3600/24/365.25
-                    dtau = (TAU_list[idx+1]-TAU_list[idx])/3600/24/365.25
+                    dtau = (TAU_list[idx+1]-TAU_list[idx])
                     norm += TTT[kk,ll]*df*dt*dtau
         tau_scan_data['norm'] = norm #TODO: Implement some check to make sure this is normalized over the same range as the prior range used in the MCMC
-        #print(norm)
+        print(norm)
  
 
     #setting up arrays to record acceptance and swaps
@@ -304,14 +317,9 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
         if TS_max>tau_scan_limit:
             tau_scan_limit = TS_max
     
-    taus = tau_scan_data['taus']
-    tau_spacing = taus[1]/taus[0]
-    TAU_list = [taus[0]/np.sqrt(tau_spacing),]
-    for k in range(taus.size):
-        TAU_list.append(taus[k]*np.sqrt(tau_spacing))
-
-    F0_list = tau_scan_data['f0s']
-    T0_list = tau_scan_data['t0s']
+    TAU_list = list(tau_scan_data['tau_edges'])
+    F0_list = tau_scan_data['f0_edges']
+    T0_list = tau_scan_data['t0_edges']
     
     for j in range(n_chain):
         n_wavelet = int(np.copy(samples[j,i,0]))
@@ -342,7 +350,7 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
                 t0_new = np.random.uniform(low=t0_min, high=t0_max)
                 tau_new = np.random.uniform(low=tau_min, high=tau_max)
 
-                tau_idx = np.digitize(tau_new, np.array(TAU_list)/(365.25*24*3600)) - 1
+                tau_idx = np.digitize(tau_new, np.array(TAU_list)) - 1
                 f0_idx = np.digitize(10**log_f0_new, np.array(F0_list[tau_idx])) - 1
                 t0_idx = np.digitize(t0_new, np.array(T0_list[tau_idx])/(365.25*24*3600)) - 1
 
@@ -439,7 +447,7 @@ def do_rj_move(n_chain, max_n_wavelet, n_wavelet_prior, ptas, samples, i, Ts, a_
             f0_old = 10**samples[j,i,1+3+remove_index*8]
             t0_old = samples[j,i,1+6+remove_index*8]
 
-            tau_idx_old = np.digitize(tau_old, np.array(TAU_list)/(365.25*24*3600)) - 1
+            tau_idx_old = np.digitize(tau_old, np.array(TAU_list)) - 1
             f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
             t0_idx_old = np.digitize(t0_old, np.array(T0_list[tau_idx_old])/(365.25*24*3600)) - 1
 
@@ -520,14 +528,9 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes,
             tau_scan_limit = TS_max
     #print(tau_scan_limit)
 
-    taus = tau_scan_data['taus']
-    tau_spacing = taus[1]/taus[0]
-    TAU_list = [taus[0]/np.sqrt(tau_spacing),]
-    for k in range(taus.size):
-        TAU_list.append(taus[k]*np.sqrt(tau_spacing))
-
-    F0_list = tau_scan_data['f0s']
-    T0_list = tau_scan_data['t0s']
+    TAU_list = list(tau_scan_data['tau_edges'])
+    F0_list = tau_scan_data['f0_edges']
+    T0_list = tau_scan_data['t0_edges']
 
     #print(len(tau_scan))
     #print(taus/(365.25*24*3600))
@@ -566,7 +569,7 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes,
             t0_new = np.random.uniform(low=t0_min, high=t0_max)
             tau_new = np.random.uniform(low=tau_min, high=tau_max)
 
-            tau_idx = np.digitize(tau_new, np.array(TAU_list)/(365.25*24*3600)) - 1
+            tau_idx = np.digitize(tau_new, np.array(TAU_list)) - 1
             f0_idx = np.digitize(10**log_f0_new, np.array(F0_list[tau_idx])) - 1
             t0_idx = np.digitize(t0_new, np.array(T0_list[tau_idx])/(365.25*24*3600)) - 1
 
@@ -606,7 +609,7 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, ptas, samples, i, Ts, a_yes,
         f0_old = 10**samples[j,i,1+3+wavelet_select*8]
         t0_old = samples[j,i,1+6+wavelet_select*8]
 
-        tau_idx_old = np.digitize(tau_old, np.array(TAU_list)/(365.25*24*3600)) - 1
+        tau_idx_old = np.digitize(tau_old, np.array(TAU_list)) - 1
         f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
         t0_idx_old = np.digitize(t0_old, np.array(T0_list[tau_idx_old])/(365.25*24*3600)) - 1
 
