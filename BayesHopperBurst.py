@@ -15,6 +15,8 @@ from enterprise.signals import white_signals
 from enterprise.signals import gp_signals
 from enterprise.signals import utils
 from enterprise.signals import deterministic_signals
+from enterprise.signals import selections
+from enterprise.signals.selections import Selection
 
 import enterprise_wavelets as models
 import pickle
@@ -937,7 +939,7 @@ def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, d
 #
 ################################################################################
 
-def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, include_gwb=True, max_n_wavelet=1, efac_start=1.0, rn_amp_prior='uniform', rn_log_amp_range=[-18,-11], rn_params=[-13.0,1.0], gwb_amp_prior='uniform', gwb_log_amp_range=[-18,-11], wavelet_amp_prior='uniform', wavelet_log_amp_range=[-18,-11], prior_recovery=False):
+def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, include_gwb=True, max_n_wavelet=1, efac_start=1.0, rn_amp_prior='uniform', rn_log_amp_range=[-18,-11], rn_params=[-13.0,1.0], gwb_amp_prior='uniform', gwb_log_amp_range=[-18,-11], wavelet_amp_prior='uniform', wavelet_log_amp_range=[-18,-11], prior_recovery=False, max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11]):
     #setting up base model
     if vary_white_noise:
         efac = parameter.Uniform(0.01, 10.0)
@@ -999,9 +1001,9 @@ def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, incl
                                               components=30, Tspan=Tspan,
                                               modes=None, name='gw')
 
-        base_model_gwb = base_model + gwb
+        #base_model_gwb = base_model + gwb
 
-    #setting up the pta object
+    #wavelet models
     wavelets = []
     for i in range(max_n_wavelet):
         log10_f0 = parameter.Uniform(np.log10(3.5e-9), -7)(str(i)+'_'+'log10_f0')
@@ -1021,39 +1023,58 @@ def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, incl
                                           tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0,
                                           epsilon = epsilon, tref=53000*86400)
         wavelets.append(deterministic_signals.Deterministic(wavelet_wf, name='wavelet'+str(i)))
+
+    #glitch models
+    glitches = []
+    for i in range(max_n_glitch):
+        log10_f0 = parameter.Uniform(np.log10(3.5e-9), -7)("glitch_"+str(i)+'_'+'log10_f0')
+        phase0 = parameter.Uniform(0, 2*np.pi)("glitch_"+str(i)+'_'+'phase0')
+        tau = parameter.Uniform(0.2, 5)("glitch_"+str(i)+'_'+'tau')
+        t0 = parameter.Uniform(0.0, 10.0)("glitch_"+str(i)+'_'+'t0')
+        psr_idx = parameter.Uniform(-0.5, len(pulsars)-0.5)("glitch_"+str(i)+'_'+'psr_idx')
+        if glitch_amp_prior == 'log-uniform':
+            log10_h = parameter.Uniform(glitch_log_amp_range[0], glitch_log_amp_range[1])("glitch_"+str(i)+'_'+'log10_h')
+        elif glitch_amp_prior == 'uniform':
+            log10_h = parameter.LinearExp(glitch_log_amp_range[0], glitch_log_amp_range[1])("glitch_"+str(i)+'_'+'log10_h')
+        else:
+            print("Glitch amplitude prior of {0} not available".format(glitch_amp_prior))
+        glitch_wf = models.glitch_delay(log10_h = log10_h, tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0, tref=53000*86400,
+                                        psr_float_idx = psr_idx, pulsars=pulsars)
+        glitches.append(deterministic_signals.Deterministic(glitch_wf, name='glitch'+str(i) ))
     
+    gwb_options = [False,]
+    if include_gwb:
+        gwb_options.append(True)
+
     ptas = []
     for n_wavelet in range(max_n_wavelet+1):
-        PTA = []
-        s = base_model
-        for i in range(n_wavelet):
-            s = s + wavelets[i]
+        glitch_sub_ptas = []
+        for n_glitch in range(max_n_glitch+1):
+            gwb_sub_ptas = []
+            for gwb_o in gwb_options:
+                #setting up the proper model
+                s = base_model
 
-        model = []
-        for p in pulsars:
-            model.append(s(p))
-        
-        #set the likelihood to unity if we are in prior recovery mode
-        if prior_recovery:
-            PTA.append(get_prior_recovery_pta(signal_base.PTA(model)))
-        else:
-            PTA.append(signal_base.PTA(model))
+                if gwb_o:
+                    s += gwb
+                for i in range(n_glitch):
+                    s = s + glitches[i]
+                for i in range(n_wavelet):
+                    s = s + wavelets[i]
 
-        if include_gwb:
-            s_gwb = base_model_gwb
-            for i in range(n_wavelet):
-                s_gwb = s_gwb + wavelets[i]
-        
-            model_gwb = []
-            for p in pulsars:
-                model_gwb.append(s_gwb(p))
-            
-            #set the likelihood to unity if we are in prior recovery mode
-            if prior_recovery:
-                PTA.append(get_prior_recovery_pta(signal_base.PTA(model_gwb)))
-            else:
-                PTA.append(signal_base.PTA(model_gwb))
-        ptas.append(PTA)
+                model = []
+                for p in pulsars:
+                    model.append(s(p))
+
+                #set the likelihood to unity if we are in prior recovery mode
+                if prior_recovery:
+                    gwb_sub_ptas.append(get_prior_recovery_pta(signal_base.PTA(model)))
+                else:
+                    gwb_sub_ptas.append(signal_base.PTA(model))
+
+            glitch_sub_ptas.append(gwb_sub_ptas)
+
+        ptas.append(glitch_sub_ptas)
 
     return ptas
 
@@ -1075,3 +1096,4 @@ def get_prior_recovery_pta(pta):
             return self.pta.get_lnprior(x)
 
     return prior_recovery_pta(pta)
+
