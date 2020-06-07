@@ -96,9 +96,8 @@ class TauScan(object):
         
         n_psr = len(self.psrs)
 
-       
-        cos_norm = 0
-        sin_norm = 0
+        tau_scan = 0
+
         for idx, (psr, Nmat, TNT, phiinv, T) in enumerate(zip(self.psrs, self.Nmats,
                                              TNTs, phiinvs, Ts)):
             Sigma = TNT + (np.diag(phiinv) if phiinv.ndim == 1 else phiinv)
@@ -108,30 +107,15 @@ class TauScan(object):
             wavelet_cos = MorletGaborWavelet(psr.toas-tref, 1.0, tau, f0, t0, 0.0)
             wavelet_sin = MorletGaborWavelet(psr.toas-tref, 1.0, tau, f0, t0, np.pi/2)
 
-            cos_norm += innerProduct_rr(wavelet_cos, wavelet_cos, Nmat, T, Sigma)
-            sin_norm += innerProduct_rr(wavelet_sin, wavelet_sin, Nmat, T, Sigma)
+            cos_norm = np.sqrt(innerProduct_rr(wavelet_cos, wavelet_cos, Nmat, T, Sigma))
+            sin_norm = np.sqrt(innerProduct_rr(wavelet_sin, wavelet_sin, Nmat, T, Sigma))
 
-        cos_norm = np.sqrt(cos_norm)
-        sin_norm = np.sqrt(sin_norm)
-        #print(cos_norm, sin_norm)
-
-        tau_scan_cos = 0
-        tau_scan_sin = 0
-        
-        for idx, (psr, Nmat, TNT, phiinv, T) in enumerate(zip(self.psrs, self.Nmats,
-                                             TNTs, phiinvs, Ts)):
-            
-            Sigma = TNT + (np.diag(phiinv) if phiinv.ndim == 1 else phiinv)
-            
-            ntoa = len(psr.toas)
-        
             wavelet_cos = MorletGaborWavelet(psr.toas-tref, 1.0/cos_norm, tau, f0, t0, 0.0)
             wavelet_sin = MorletGaborWavelet(psr.toas-tref, 1.0/sin_norm, tau, f0, t0, np.pi/2)
-        
-            tau_scan_cos += innerProduct_rr(wavelet_cos, psr.residuals, Nmat, T, Sigma)
-            tau_scan_sin += innerProduct_rr(wavelet_sin, psr.residuals, Nmat, T, Sigma)
             
-        return tau_scan_cos, tau_scan_sin
+            tau_scan += innerProduct_rr(wavelet_cos, psr.residuals, Nmat, T, Sigma)**2 + innerProduct_rr(wavelet_sin, psr.residuals, Nmat, T, Sigma)**2
+
+        return tau_scan
         #return cos_norm, sin_norm
 
 def MorletGaborWavelet(t, A, tau, f0, t0, phi0):
@@ -260,8 +244,9 @@ def make_tau_scan_map(TauScan, n_tau=5, f_min=None, f_max=None, t_min=None, t_ma
         TS = np.zeros((N_f, N_t))
         for i, f0 in enumerate(f0s):
             for j, t0 in enumerate(t0s):
-                COS, SIN = TauScan.compute_TauScan(tau, t0, f0)
-                TS[i,j] = COS**2 + SIN**2
+                #COS, SIN = TauScan.compute_TauScan(tau, t0, f0)
+                #TS[i,j] = COS**2 + SIN**2
+                TS[i,j] = TauScan.compute_TauScan(tau, t0, f0)
         tau_scan.append(TS)
 
     return {'tau_scan':tau_scan, 'tau_edges':tau_edges, 't0_edges':T0_list, 'f0_edges':F0_list}
