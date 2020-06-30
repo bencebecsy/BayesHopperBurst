@@ -264,6 +264,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         print("#"*70)
         
         #normalization
+        glitch_tau_scan_data['psr_idx_proposal'] = np.ones(len(pulsars))
         for i in range(len(pulsars)):
             print(i)
             glitch_tau_scan = glitch_tau_scan_data['tau_scan'+str(i)]
@@ -279,7 +280,21 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
                         norm += TTT[kk,ll]*df*dt*dtau
             glitch_tau_scan_data['norm'+str(i)] = norm #TODO: Implement some check to make sure this is normalized over the same range as the prior range used in the MCMC
             print(norm)
- 
+
+            tau_scan_limit = 0.1#0 #--start form 1 to avoid having zeros in the proposal
+            for g_TS, TS in zip(glitch_tau_scan, tau_scan_data['tau_scan']):
+                TS_max = np.max( g_TS - TS/np.sqrt(float(len(pulsars))) )
+                if TS_max>tau_scan_limit:
+                    tau_scan_limit = TS_max
+            print(tau_scan_limit)
+            glitch_tau_scan_data['psr_idx_proposal'][i] = tau_scan_limit
+
+        glitch_tau_scan_data['psr_idx_proposal'] = glitch_tau_scan_data['psr_idx_proposal']/np.sum(glitch_tau_scan_data['psr_idx_proposal'])
+        print('-'*20)
+        print("Glitch psr index proposal:")
+        print(glitch_tau_scan_data['psr_idx_proposal'])
+        print(np.sum(glitch_tau_scan_data['psr_idx_proposal']))
+        print('-'*20) 
 
     #setting up arrays to record acceptance and swaps
     a_yes=np.zeros(n_chain+2)
@@ -446,7 +461,7 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
         direction_decide = np.random.uniform()
         if n_glitch==0 or (direction_decide<add_prob and n_glitch!=max_n_glitch): #adding a wavelet------------------------------------------------------
             #pick which pulsar to add a glitch to
-            psr_idx = np.random.choice(len(ptas[n_wavelet][0][gwb_on].pulsars))
+            psr_idx = np.random.choice(len(ptas[n_wavelet][0][gwb_on].pulsars), p=glitch_tau_scan_data['psr_idx_proposal'])
 
             #load in the appropriate tau-scan
             tau_scan = glitch_tau_scan_data['tau_scan'+str(psr_idx)]
@@ -488,7 +503,7 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             phase0_new = ptas[0][1][gwb_on].params[2].sample()
             log10_h_new = ptas[0][1][gwb_on].params[1].sample()
 
-            prior_ext = ptas[0][1][gwb_on].params[2].get_pdf(phase0_new) * ptas[0][1][gwb_on].params[1].get_pdf(log10_h_new) * ptas[0][1][gwb_on].params[3].get_pdf(float(psr_idx))
+            prior_ext = ptas[0][1][gwb_on].params[2].get_pdf(phase0_new) * ptas[0][1][gwb_on].params[1].get_pdf(log10_h_new)# * ptas[0][1][gwb_on].params[3].get_pdf(float(psr_idx))
 
             samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
             new_point = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch+1, max_n_glitch)
@@ -503,7 +518,7 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             #apply normalization
             tau_scan_new_point_normalized = tau_scan_new_point/glitch_tau_scan_data['norm'+str(psr_idx)]
 
-            acc_ratio = np.exp(log_acc_ratio)/prior_ext/tau_scan_new_point_normalized
+            acc_ratio = np.exp(log_acc_ratio)/prior_ext/tau_scan_new_point_normalized/glitch_tau_scan_data['psr_idx_proposal'][psr_idx]
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
             if n_glitch==0:
                 acc_ratio *= 0.5
@@ -566,9 +581,9 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             #apply normalization
             tau_scan_old_point_normalized = tau_scan_old_point/glitch_tau_scan_data['norm'+str(psr_idx_old)]
 
-            prior_ext = ptas[0][1][gwb_on].params[2].get_pdf(phase0_old) * ptas[0][1][gwb_on].params[1].get_pdf(log10_h_old) * ptas[0][1][gwb_on].params[3].get_pdf(psr_idx_old)
+            prior_ext = ptas[0][1][gwb_on].params[2].get_pdf(phase0_old) * ptas[0][1][gwb_on].params[1].get_pdf(log10_h_old)# * ptas[0][1][gwb_on].params[3].get_pdf(psr_idx_old)
 
-            acc_ratio = np.exp(log_acc_ratio)*prior_ext*tau_scan_old_point_normalized
+            acc_ratio = np.exp(log_acc_ratio)*prior_ext*tau_scan_old_point_normalized*glitch_tau_scan_data['psr_idx_proposal'][psr_idx_old]
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
             if n_glitch==1:
                 acc_ratio *= 2.0
