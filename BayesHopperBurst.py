@@ -297,8 +297,8 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         print('-'*20) 
 
     #setting up arrays to record acceptance and swaps
-    a_yes=np.zeros(n_chain+2)
-    a_no=np.zeros(n_chain+2)
+    a_yes=np.zeros((7, n_chain)) #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, PT, fisher, noise_jump)
+    a_no=np.zeros((7, n_chain))
     swap_record = []
     rj_record = []
 
@@ -327,14 +327,11 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
         if i%n_status_update==0:
             acc_fraction = a_yes/(a_no+a_yes)
             if jupyter_notebook:
-                print('Progress: {0:2.2f}% '.format(i/N*100) +
-                      'Acceptance fraction (RJ, swap, each chain): ({0:1.2f}, {1:1.2f}, '.format(acc_fraction[0], acc_fraction[1]) +
-                      ', '.join(['{{{}:1.2f}}'.format(i) for i in range(n_chain)]).format(*acc_fraction[2:]) +
-                      ')' + '\r',end='')
+                print('Progress: {0:2.2f}% '.format(i/N*100) + '\r',end='')
             else:
                 print('Progress: {0:2.2f}% '.format(i/N*100) +
-                      'Acceptance fraction (RJ, swap, each chain): ({0:1.2f}, {1:1.2f}, '.format(acc_fraction[0], acc_fraction[1]) +
-                      ', '.join(['{{{}:1.2f}}'.format(i) for i in range(n_chain)]).format(*acc_fraction[2:]) + ')')
+                        'Acceptance fraction #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, PT, fisher, noise_jump):')
+                print(acc_fraction)
         #################################################################################
         #
         #update our eigenvectors from the fisher matrix every n_fish_update iterations
@@ -534,10 +531,10 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
                 samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
                 samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+(n_glitch+1)*6] = new_point[n_wavelet*8:n_wavelet*8+(n_glitch+1)*6]
                 samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+(n_glitch+1)*6:]
-                a_yes[0] += 1
+                a_yes[0,j] += 1
             else:
                 samples[j,i+1,:] = samples[j,i,:]
-                a_no[0] += 1
+                a_no[0,j] += 1
 
         elif n_glitch==max_n_glitch or (direction_decide>add_prob and n_glitch!=0):   #removing a wavelet----------------------------------------------------------
             #choose which glitch to remove
@@ -599,10 +596,10 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
                 samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
                 samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+(n_glitch-1)*6] = new_point[n_wavelet*8:n_wavelet*8+(n_glitch-1)*6]
                 samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+(n_glitch-1)*6:]
-                a_yes[0] += 1
+                a_yes[0,j] += 1
             else:
                 samples[j,i+1,:] = samples[j,i,:]
-                a_no[0] += 1
+                a_no[0,j] += 1
 
 
 ################################################################################
@@ -628,7 +625,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         #    print(samples[j,i,:])
         if n_glitch==0:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[1,j]+=1
             #print("No glitch to vary!")
             continue
 
@@ -743,10 +740,10 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
             samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
             samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
             samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
-            a_yes[j+2]+=1
+            a_yes[1,j]+=1
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[1,j]+=1
 
 
 ################################################################################
@@ -883,10 +880,10 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
                 samples[j,i+1,2:2+(n_wavelet+1)*8] = new_point[:(n_wavelet+1)*8]
                 samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[(n_wavelet+1)*8:(n_wavelet+1)*8+n_glitch*6]
                 samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[(n_wavelet+1)*8+n_glitch*6:]
-                a_yes[0] += 1
+                a_yes[2,j] += 1
             else:
                 samples[j,i+1,:] = samples[j,i,:]
-                a_no[0] += 1
+                a_no[2,j] += 1
 
         elif n_wavelet==max_n_wavelet or (direction_decide>add_prob and n_wavelet!=0):   #removing a wavelet----------------------------------------------------------
             if j==0: rj_record.append(-1)
@@ -971,10 +968,10 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
                 samples[j,i+1,2:2+(n_wavelet-1)*8] = new_point[:(n_wavelet-1)*8]
                 samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[(n_wavelet-1)*8:(n_wavelet-1)*8+n_glitch*6]
                 samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[(n_wavelet-1)*8+n_glitch*6:]
-                a_yes[0] += 1
+                a_yes[2,j] += 1
             else:
                 samples[j,i+1,:] = samples[j,i,:]
-                a_no[0] += 1
+                a_no[2,j] += 1
 
 
 ################################################################################
@@ -1020,7 +1017,7 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
         #print(n_wavelet)
         if n_wavelet==0:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[3,j]+=1
             #print("No source to vary!")
             continue
 
@@ -1098,10 +1095,10 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
             samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
             samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
             samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
-            a_yes[j+2]+=1
+            a_yes[3,j]+=1
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[3,j]+=1
 
 
 ################################################################################
@@ -1164,7 +1161,7 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
         #case #4: nothing to vary
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[5,j]+=1
             #print("Nothing to vary!")
             continue
 
@@ -1225,10 +1222,10 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
             samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
             samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
             samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
-            a_yes[j+2]+=1
+            a_yes[5,j]+=1
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[5,j]+=1
 
 
 ################################################################################
@@ -1273,12 +1270,12 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
                 samples[j,i+1,:] = samples[j-1,i,:]
             else:
                 samples[j,i+1,:] = samples[j,i,:]
-        a_yes[1]+=1
+        a_yes[4,swap_chain]+=1
         swap_record.append(swap_chain)
     else:
         for j in range(n_chain):
             samples[j,i+1,:] = samples[j,i,:]
-        a_no[1]+=1
+        a_no[4,swap_chain]+=1
 
 ################################################################################
 #
@@ -1325,10 +1322,10 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
             samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
             samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
             samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
-            a_yes[j+2]+=1
+            a_yes[6,j]+=1
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[j+2]+=1
+            a_no[6,j]+=1
 
 
 ################################################################################
