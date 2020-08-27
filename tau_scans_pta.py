@@ -110,6 +110,12 @@ class TauScan(object):
             cos_norm = np.sqrt(innerProduct_rr(wavelet_cos, wavelet_cos, Nmat, T, Sigma))
             sin_norm = np.sqrt(innerProduct_rr(wavelet_sin, wavelet_sin, Nmat, T, Sigma))
 
+            #catch for missing data
+            if cos_norm==0.0:
+                cos_norm = 1.0
+            if sin_norm==0.0:
+                sin_norm = 1.0
+
             wavelet_cos = MorletGaborWavelet(psr.toas-tref, 1.0/cos_norm, tau, f0, t0, 0.0)
             wavelet_sin = MorletGaborWavelet(psr.toas-tref, 1.0/sin_norm, tau, f0, t0, np.pi/2)
             
