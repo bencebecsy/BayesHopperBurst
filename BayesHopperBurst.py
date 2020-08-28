@@ -92,7 +92,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         print("Prior on number of glitches: ", n_glitch_prior)
 
     #setting up array for the samples
-    num_params = max_n_wavelet*8+max_n_glitch*6
+    num_params = max_n_wavelet*10+max_n_glitch*6
     num_params += 2 #for keepeng a record of number of wavelets and glitches
     if include_gwb:
         num_params += 1
@@ -136,27 +136,25 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         if n_wavelet!=0:
             #making sure all wavelets get the same sky location and ellipticity
             init_cos_gwtheta = ptas[n_wavelet][0][0].params[0].sample()
-            init_epsilon = ptas[n_wavelet][0][0].params[1].sample()
+            init_psi = ptas[n_wavelet][0][0].params[1].sample()
             init_gwphi = ptas[n_wavelet][0][0].params[2].sample()
             for which_wavelet in range(n_wavelet):
-                samples[j,0,2+0+which_wavelet*8] = init_cos_gwtheta
-                samples[j,0,2+1+which_wavelet*8] = init_epsilon
-                samples[j,0,2+2+which_wavelet*8] = init_gwphi
+                samples[j,0,2+0+which_wavelet*10] = init_cos_gwtheta
+                samples[j,0,2+1+which_wavelet*10] = init_psi
+                samples[j,0,2+2+which_wavelet*10] = init_gwphi
                 #randomly pick other wavelet parameters separately fo each wavelet
-                samples[j,0,2+3+which_wavelet*8:2+8+which_wavelet*8] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[3:8])
-            #start from injected parameters for testing
-            ####samples[j,0,1:n_wavelet*8+1] = np.array([0.0, 1.0, 0.0, -7.522, -5.0, 0.0, 2.738, 0.548])
+                samples[j,0,2+3+which_wavelet*10:2+10+which_wavelet*10] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[3:10])
 
         if n_glitch!=0:
             for which_glitch in range(n_glitch):
-                samples[j,0,2+8*max_n_wavelet+which_glitch*6:2+8*max_n_wavelet+6+which_glitch*6] = np.hstack(p.sample() for p in ptas[0][n_glitch][0].params[:6])
+                samples[j,0,2+10*max_n_wavelet+which_glitch*6:2+10*max_n_wavelet+6+which_glitch*6] = np.hstack(p.sample() for p in ptas[0][n_glitch][0].params[:6])
 
         if vary_white_noise:
-            samples[j,0,2+max_n_wavelet*8+max_n_glitch*6:2+max_n_wavelet*8+max_n_glitch*6+len(pulsars)] = np.ones(len(pulsars))*efac_start
+            samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+len(pulsars)] = np.ones(len(pulsars))*efac_start
         if vary_rn:
-            samples[j,0,2+max_n_wavelet*8+max_n_glitch*6+len(pulsars):2+max_n_wavelet*8+max_n_glitch*6+num_noise_params] = np.array([ptas[n_wavelet][0][0].params[n_wavelet*8+num_noise_params-2].sample(), ptas[n_wavelet][0][0].params[n_wavelet*8+num_noise_params-1].sample()])
+            samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+len(pulsars):2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = np.array([ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-2].sample(), ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-1].sample()])
         if include_gwb:
-            samples[j,0,2+max_n_wavelet*8+max_n_glitch*6+num_noise_params] = ptas[n_wavelet][0][1].params[n_wavelet*8+num_noise_params].sample()
+            samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = ptas[n_wavelet][0][1].params[n_wavelet*10+num_noise_params].sample()
     print(samples[0,0,:])
     n_wavelet = get_n_wavelet(samples, 0, 0)
     n_glitch = get_n_glitch(samples, 0, 0)
@@ -168,7 +166,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
 
     #setting up array for the fisher eigenvalues
     #one for wavelet parameters which we will keep updating
-    eig = np.ones((n_chain, max_n_wavelet, 8, 8))*0.1
+    eig = np.ones((n_chain, max_n_wavelet, 10, 10))*0.1
 
     #also one for the glitch parameters
     eig_glitch = np.ones((n_chain, max_n_glitch, 6, 6))*0.03
@@ -187,9 +185,9 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         n_wavelet = get_n_wavelet(samples, j, 0)
         n_glitch = get_n_glitch(samples, j, 0)
         if include_gwb:
-            wn_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][1], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*8+n_glitch*6)
+            wn_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][1], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*10+n_glitch*6)
         else:
-            wn_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*8+n_glitch*6)
+            wn_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars), offset=n_wavelet*10+n_glitch*6)
         #print(wn_eigvec)
         eig_wn[j,:,:] = wn_eigvec[0,:,:]
 
@@ -211,10 +209,10 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         #check if same prior range was used
         log_f0_max = float(ptas[-1][-1][-1].params[3]._typename.split('=')[2][:-1])
         log_f0_min = float(ptas[-1][-1][-1].params[3]._typename.split('=')[1].split(',')[0])
-        t0_max = float(ptas[-1][-1][-1].params[6]._typename.split('=')[2][:-1])
-        t0_min = float(ptas[-1][-1][-1].params[6]._typename.split('=')[1].split(',')[0])
-        tau_max = float(ptas[-1][-1][-1].params[7]._typename.split('=')[2][:-1])
-        tau_min = float(ptas[-1][-1][-1].params[7]._typename.split('=')[1].split(',')[0])
+        t0_max = float(ptas[-1][-1][-1].params[8]._typename.split('=')[2][:-1])
+        t0_min = float(ptas[-1][-1][-1].params[8]._typename.split('=')[1].split(',')[0])
+        tau_max = float(ptas[-1][-1][-1].params[9]._typename.split('=')[2][:-1])
+        tau_min = float(ptas[-1][-1][-1].params[9]._typename.split('=')[1].split(',')[0])
 
         print("#"*70)
         print("Tau-scan and MCMC prior range check (they must be the same)")
@@ -253,10 +251,10 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         #check if same prior range was used
         log_f0_max = float(ptas[-1][-1][-1].params[3]._typename.split('=')[2][:-1])
         log_f0_min = float(ptas[-1][-1][-1].params[3]._typename.split('=')[1].split(',')[0])
-        t0_max = float(ptas[-1][-1][-1].params[6]._typename.split('=')[2][:-1])
-        t0_min = float(ptas[-1][-1][-1].params[6]._typename.split('=')[1].split(',')[0])
-        tau_max = float(ptas[-1][-1][-1].params[7]._typename.split('=')[2][:-1])
-        tau_min = float(ptas[-1][-1][-1].params[7]._typename.split('=')[1].split(',')[0])
+        t0_max = float(ptas[-1][-1][-1].params[8]._typename.split('=')[2][:-1])
+        t0_min = float(ptas[-1][-1][-1].params[8]._typename.split('=')[1].split(',')[0])
+        tau_max = float(ptas[-1][-1][-1].params[9]._typename.split('=')[2][:-1])
+        tau_min = float(ptas[-1][-1][-1].params[9]._typename.split('=')[1].split(',')[0])
 
         print("#"*70)
         print("Glitch tau--scan and MCMC prior range check (they must be the same)")
@@ -372,7 +370,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                         #    print("-")
                     #glitch eigenvectors
                     if n_glitch!=0:
-                        eigen_glitch = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=n_glitch, dim=6, offset=n_wavelet*8)
+                        eigen_glitch = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=n_glitch, dim=6, offset=n_wavelet*10)
                         #print("Eigen glitch")
                         if np.all(eigen_glitch):
                             #print("+")
@@ -383,9 +381,9 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                         #    print(eigen_glitch)
                     #RN+GWB eigenvectors
                     if include_gwb:
-                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*8+n_glitch*6+len(pulsars))
+                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*10+n_glitch*6+len(pulsars))
                     else:
-                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*8+n_glitch*6+len(pulsars))
+                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*10+n_glitch*6+len(pulsars))
                     #print("Eigen RN+GWB")
                     if np.all(eigvec_rn):
                         #print("+")
@@ -517,7 +515,7 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
             new_point = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch+1, max_n_glitch)
             new_glitch = np.array([log_f0_new, log10_h_new, phase0_new, float(psr_idx), t0_new, tau_new])
-            new_point[n_wavelet*8+n_glitch*6:n_wavelet*8+(n_glitch+1)*6] = new_glitch
+            new_point[n_wavelet*10+n_glitch*6:n_wavelet*10+(n_glitch+1)*6] = new_glitch
 
             log_acc_ratio = ptas[n_wavelet][(n_glitch+1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]
             log_L = log_acc_ratio
@@ -541,9 +539,9 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
                 #if j==0: print("Yeeeh")
                 samples[j,i+1,0] = n_wavelet
                 samples[j,i+1,1] = n_glitch+1
-                samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
-                samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+(n_glitch+1)*6] = new_point[n_wavelet*8:n_wavelet*8+(n_glitch+1)*6]
-                samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+(n_glitch+1)*6:]
+                samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+                samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+(n_glitch+1)*6] = new_point[n_wavelet*10:n_wavelet*10+(n_glitch+1)*6]
+                samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+(n_glitch+1)*6:]
                 a_yes[0,j] += 1
                 log_likelihood[j,i+1] = log_L
             else:
@@ -556,7 +554,7 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             remove_index = np.random.randint(n_glitch)
 
             samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
-            new_point = np.delete(samples_current, range(n_wavelet*8+remove_index*6,n_wavelet*8+(remove_index+1)*6))
+            new_point = np.delete(samples_current, range(n_wavelet*10+remove_index*6,n_wavelet*10+(remove_index+1)*6))
 
             log_acc_ratio = ptas[n_wavelet][(n_glitch-1)][gwb_on].get_lnlikelihood(new_point)/Ts[j]
             log_L = log_acc_ratio
@@ -565,14 +563,14 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
             #getting old parameters
-            tau_old = samples[j,i,2+max_n_wavelet*8+remove_index*6+5]
-            f0_old = 10**samples[j,i,2+max_n_wavelet*8+remove_index*6+0]
-            t0_old = samples[j,i,2+max_n_wavelet*8+remove_index*6+4]
-            log10_h_old = samples[j,i,2+max_n_wavelet*8+remove_index*6+1]
-            phase0_old = samples[j,i,2+max_n_wavelet*8+remove_index*6+2]
+            tau_old = samples[j,i,2+max_n_wavelet*10+remove_index*6+5]
+            f0_old = 10**samples[j,i,2+max_n_wavelet*10+remove_index*6+0]
+            t0_old = samples[j,i,2+max_n_wavelet*10+remove_index*6+4]
+            log10_h_old = samples[j,i,2+max_n_wavelet*10+remove_index*6+1]
+            phase0_old = samples[j,i,2+max_n_wavelet*10+remove_index*6+2]
            
             #get old psr index and load in appropriate tau scan
-            psr_idx_old = int(np.round(samples[j,i,2+max_n_wavelet*8+remove_index*6+3]))
+            psr_idx_old = int(np.round(samples[j,i,2+max_n_wavelet*10+remove_index*6+3]))
             tau_scan_old = glitch_tau_scan_data['tau_scan'+str(psr_idx_old)]
             tau_scan_limit_old = 0
             for TS in tau_scan_old:
@@ -609,9 +607,9 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
                 #if j==0: print("Ohhhhhhhhhhhhh")
                 samples[j,i+1,0] = n_wavelet
                 samples[j,i+1,1] = n_glitch-1
-                samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
-                samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+(n_glitch-1)*6] = new_point[n_wavelet*8:n_wavelet*8+(n_glitch-1)*6]
-                samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+(n_glitch-1)*6:]
+                samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+                samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+(n_glitch-1)*6] = new_point[n_wavelet*10:n_wavelet*10+(n_glitch-1)*6]
+                samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+(n_glitch-1)*6:]
                 a_yes[0,j] += 1
                 log_likelihood[j,i+1] = log_L
             else:
@@ -660,7 +658,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         if np.random.uniform()<=0.5:
             psr_idx = np.random.choice(len(ptas[n_wavelet][0][gwb_on].pulsars))
         else:
-            psr_idx = int(np.round(samples[j,i,2+max_n_wavelet*8+glitch_select*6+3]))
+            psr_idx = int(np.round(samples[j,i,2+max_n_wavelet*10+glitch_select*6+3]))
         #if j==0: print(psr_idx)
 
         #load in the appropriate tau-scan
@@ -705,7 +703,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
 
         samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
         new_point = np.copy(samples_current)
-        new_point[n_wavelet*8+glitch_select*6:n_wavelet*8+(glitch_select+1)*6] = np.array([log_f0_new, log10_h_new, phase0_new,
+        new_point[n_wavelet*10+glitch_select*6:n_wavelet*10+(glitch_select+1)*6] = np.array([log_f0_new, log10_h_new, phase0_new,
                                                                                            float(psr_idx), t0_new, tau_new])
 
         #if j==0:
@@ -719,12 +717,12 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
         #getting ratio of proposal densities!
-        tau_old = samples[j,i,2+max_n_wavelet*8+glitch_select*6+5]
-        f0_old = 10**samples[j,i,2+max_n_wavelet*8+glitch_select*6+0]
-        t0_old = samples[j,i,2+max_n_wavelet*8+glitch_select*6+4]
+        tau_old = samples[j,i,2+max_n_wavelet*10+glitch_select*6+5]
+        f0_old = 10**samples[j,i,2+max_n_wavelet*10+glitch_select*6+0]
+        t0_old = samples[j,i,2+max_n_wavelet*10+glitch_select*6+4]
 
         #get old psr index and load in appropriate tau scan
-        psr_idx_old = int(np.round(samples[j,i,2+max_n_wavelet*8+glitch_select*6+3]))
+        psr_idx_old = int(np.round(samples[j,i,2+max_n_wavelet*10+glitch_select*6+3]))
         tau_scan_old = glitch_tau_scan_data['tau_scan'+str(psr_idx_old)]
         tau_scan_limit_old = 0
         for TS in tau_scan_old:
@@ -742,7 +740,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
 
         tau_scan_old_point = tau_scan_old[tau_idx_old][f0_idx_old, t0_idx_old]
         
-        log10_h_old = samples[j,i,2+max_n_wavelet*8+glitch_select*6+1]
+        log10_h_old = samples[j,i,2+max_n_wavelet*10+glitch_select*6+1]
         hastings_extra_factor = ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new)
     
         acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * (tau_scan_limit/tau_scan_limit_old) * hastings_extra_factor
@@ -756,9 +754,9 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
             #if j==0: print("Ohh jeez")
             samples[j,i+1,0] = n_wavelet
             samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
-            samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
+            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
             a_yes[1,j]+=1
             log_likelihood[j,i+1] = log_L
         else:
@@ -811,10 +809,10 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
 
             log_f0_max = float(ptas[-1][0][gwb_on].params[3]._typename.split('=')[2][:-1])
             log_f0_min = float(ptas[-1][0][gwb_on].params[3]._typename.split('=')[1].split(',')[0])
-            t0_max = float(ptas[-1][0][gwb_on].params[6]._typename.split('=')[2][:-1])
-            t0_min = float(ptas[-1][0][gwb_on].params[6]._typename.split('=')[1].split(',')[0])
-            tau_max = float(ptas[-1][0][gwb_on].params[7]._typename.split('=')[2][:-1])
-            tau_min = float(ptas[-1][0][gwb_on].params[7]._typename.split('=')[1].split(',')[0])
+            t0_max = float(ptas[-1][0][gwb_on].params[8]._typename.split('=')[2][:-1])
+            t0_min = float(ptas[-1][0][gwb_on].params[8]._typename.split('=')[1].split(',')[0])
+            tau_max = float(ptas[-1][0][gwb_on].params[9]._typename.split('=')[2][:-1])
+            tau_min = float(ptas[-1][0][gwb_on].params[9]._typename.split('=')[1].split(',')[0])
 
             accepted = False
             while accepted==False:
@@ -837,27 +835,31 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
 
             #randomly select other parameters
             log10_h_new = ptas[-1][0][gwb_on].params[4].sample()
-            phase0_new = ptas[-1][0][gwb_on].params[5].sample()
-            #if this is the first wavelet, draw sky location and ellipticity too
+            log10_h_cross_new = ptas[-1][0][gwb_on].params[5].sample()
+            phase0_new = ptas[-1][0][gwb_on].params[6].sample()
+            phase0_cross_new = ptas[-1][0][gwb_on].params[7].sample()
+            #if this is the first wavelet, draw sky location and polarization angle too
             if n_wavelet==0:
                 cos_gwtheta_new = ptas[-1][0][gwb_on].params[0].sample()
                 gwphi_new = ptas[-1][0][gwb_on].params[2].sample()
-                epsilon_new = ptas[-1][0][gwb_on].params[1].sample()
+                psi_new = ptas[-1][0][gwb_on].params[1].sample()
             #if this is not the first wavelet, copy sky location and ellipticity from existing wavelet(s)
             else:
                 cos_gwtheta_new = np.copy(samples[j,i,2+0])
                 gwphi_new = np.copy(samples[j,i,2+2])
-                epsilon_new = np.copy(samples[j,i,2+1])
+                psi_new = np.copy(samples[j,i,2+1])
 
-            prior_ext = (ptas[-1][0][gwb_on].params[0].get_pdf(cos_gwtheta_new) * ptas[-1][0][gwb_on].params[1].get_pdf(epsilon_new) *
-                         ptas[-1][0][gwb_on].params[2].get_pdf(gwphi_new) * ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new) * 
-                         ptas[-1][0][gwb_on].params[5].get_pdf(phase0_new))
+            prior_ext = (ptas[-1][0][gwb_on].params[0].get_pdf(cos_gwtheta_new) * ptas[-1][0][gwb_on].params[1].get_pdf(psi_new) *
+                         ptas[-1][0][gwb_on].params[2].get_pdf(gwphi_new) *
+                         ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new) * ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_new) *
+                         ptas[-1][0][gwb_on].params[6].get_pdf(phase0_new) * ptas[-1][0][gwb_on].params[7].get_pdf(phase0_cross_new))
 
             samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
 
             new_point = strip_samples(samples, j, i, n_wavelet+1, max_n_wavelet, n_glitch, max_n_glitch)
-            new_wavelet = np.array([cos_gwtheta_new, epsilon_new, gwphi_new, log_f0_new, log10_h_new, phase0_new, t0_new, tau_new])
-            new_point[n_wavelet*8:(n_wavelet+1)*8] = new_wavelet
+            new_wavelet = np.array([cos_gwtheta_new, psi_new, gwphi_new, log_f0_new, log10_h_new, log10_h_cross_new,
+                                    phase0_new, phase0_cross_new, t0_new, tau_new])
+            new_point[n_wavelet*10:(n_wavelet+1)*10] = new_wavelet
 
             #if j==0:
             #    print(samples_current)
@@ -899,9 +901,9 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
                 #if j==0: print("Yeeeh")
                 samples[j,i+1,0] = n_wavelet+1
                 samples[j,i+1,1] = n_glitch
-                samples[j,i+1,2:2+(n_wavelet+1)*8] = new_point[:(n_wavelet+1)*8]
-                samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[(n_wavelet+1)*8:(n_wavelet+1)*8+n_glitch*6]
-                samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[(n_wavelet+1)*8+n_glitch*6:]
+                samples[j,i+1,2:2+(n_wavelet+1)*10] = new_point[:(n_wavelet+1)*10]
+                samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[(n_wavelet+1)*10:(n_wavelet+1)*10+n_glitch*6]
+                samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[(n_wavelet+1)*10+n_glitch*6:]
                 a_yes[2,j] += 1
                 log_likelihood[j,i+1] = log_L
             else:
@@ -916,7 +918,7 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
             remove_index = np.random.randint(n_wavelet)
 
             samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
-            new_point = np.delete(samples_current, range(remove_index*8,(remove_index+1)*8))
+            new_point = np.delete(samples_current, range(remove_index*10,(remove_index+1)*10))
 
             #if j==0:
             #    print(samples_current)
@@ -929,9 +931,9 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
             #getting tau_scan at old point
-            tau_old = samples[j,i,2+7+remove_index*8]
-            f0_old = 10**samples[j,i,2+3+remove_index*8]
-            t0_old = samples[j,i,2+6+remove_index*8]
+            tau_old = samples[j,i,2+9+remove_index*10]
+            f0_old = 10**samples[j,i,2+3+remove_index*10]
+            t0_old = samples[j,i,2+8+remove_index*10]
 
             tau_idx_old = np.digitize(tau_old, np.array(TAU_list)) - 1
             f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
@@ -943,11 +945,13 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
             tau_scan_old_point_normalized = tau_scan_old_point/tau_scan_data['norm']
 
             #getting external parameter priors
-            log10_h_old = np.copy(samples[j,i,2+4+remove_index*8])
-            phase0_old = np.copy(samples[j,i,2+5+remove_index*8])
-            cos_gwtheta_old = np.copy(samples[j,i,2+0+remove_index*8])
-            gwphi_old = np.copy(samples[j,i,2+2+remove_index*8])
-            epsilon_old = np.copy(samples[j,i,2+1+remove_index*8])
+            log10_h_old = np.copy(samples[j,i,2+4+remove_index*10])
+            log10_h_cross_old = np.copy(samples[j,i,2+5+remove_index*10])
+            phase0_old = np.copy(samples[j,i,2+6+remove_index*10])
+            phase0_cross_old = np.copy(samples[j,i,2+7+remove_index*10])
+            cos_gwtheta_old = np.copy(samples[j,i,2+0+remove_index*10])
+            gwphi_old = np.copy(samples[j,i,2+2+remove_index*10])
+            psi_old = np.copy(samples[j,i,2+1+remove_index*10])
 
             #if j==0:
             #    print("---")
@@ -964,9 +968,10 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
             #    print("---")
                 
 
-            prior_ext = (ptas[-1][0][gwb_on].params[0].get_pdf(cos_gwtheta_old) * ptas[-1][0][gwb_on].params[1].get_pdf(epsilon_old) *
-                         ptas[-1][0][gwb_on].params[2].get_pdf(gwphi_old) * ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) *
-                         ptas[-1][0][gwb_on].params[5].get_pdf(phase0_old))
+            prior_ext = (ptas[-1][0][gwb_on].params[0].get_pdf(cos_gwtheta_old) * ptas[-1][0][gwb_on].params[1].get_pdf(psi_old) *
+                         ptas[-1][0][gwb_on].params[2].get_pdf(gwphi_old) *
+                         ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) * ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_old) *
+                         ptas[-1][0][gwb_on].params[6].get_pdf(phase0_old) * ptas[-1][0][gwb_on].params[7].get_pdf(phase0_cross_old))
 
             acc_ratio = np.exp(log_acc_ratio)*prior_ext*tau_scan_old_point_normalized
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
@@ -990,9 +995,9 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
                 #if j==0: print("Ohhhhhhhhhhhhh")
                 samples[j,i+1,0] = n_wavelet-1
                 samples[j,i+1,1] = n_glitch
-                samples[j,i+1,2:2+(n_wavelet-1)*8] = new_point[:(n_wavelet-1)*8]
-                samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[(n_wavelet-1)*8:(n_wavelet-1)*8+n_glitch*6]
-                samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[(n_wavelet-1)*8+n_glitch*6:]
+                samples[j,i+1,2:2+(n_wavelet-1)*10] = new_point[:(n_wavelet-1)*10]
+                samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[(n_wavelet-1)*10:(n_wavelet-1)*10+n_glitch*6]
+                samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[(n_wavelet-1)*10+n_glitch*6:]
                 a_yes[2,j] += 1
                 log_likelihood[j,i+1] = log_L
             else:
@@ -1055,10 +1060,10 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
 
         log_f0_max = float(ptas[n_wavelet][0][gwb_on].params[3]._typename.split('=')[2][:-1])
         log_f0_min = float(ptas[n_wavelet][0][gwb_on].params[3]._typename.split('=')[1].split(',')[0])
-        t0_max = float(ptas[n_wavelet][0][gwb_on].params[6]._typename.split('=')[2][:-1])
-        t0_min = float(ptas[n_wavelet][0][gwb_on].params[6]._typename.split('=')[1].split(',')[0])
-        tau_max = float(ptas[n_wavelet][0][gwb_on].params[7]._typename.split('=')[2][:-1])
-        tau_min = float(ptas[n_wavelet][0][gwb_on].params[7]._typename.split('=')[1].split(',')[0])
+        t0_max = float(ptas[n_wavelet][0][gwb_on].params[8]._typename.split('=')[2][:-1])
+        t0_min = float(ptas[n_wavelet][0][gwb_on].params[8]._typename.split('=')[1].split(',')[0])
+        tau_max = float(ptas[n_wavelet][0][gwb_on].params[9]._typename.split('=')[2][:-1])
+        tau_min = float(ptas[n_wavelet][0][gwb_on].params[9]._typename.split('=')[1].split(',')[0])
 
         accepted = False
         while accepted==False:
@@ -1079,22 +1084,22 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
                 accepted = True
                 #print("Yeeeh!")
 
-        #randomly select other parameters (except sky location and epsilon, which we won't change here)
+        #randomly select other parameters (except sky location and psi, which we won't change here)
         #cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
         cos_gwtheta_old = np.copy(samples[j,i,2+0])
-        #gwphi_new = ptas[-1][gwb_on].params[2].sample()
         gwphi_old = np.copy(samples[j,i,2+2])
-        phase0_new = ptas[-1][0][gwb_on].params[5].sample()
-        #epsilon_new = ptas[-1][gwb_on].params[1].sample()
-        epsilon_old = np.copy(samples[j,i,2+1])
+        psi_old = np.copy(samples[j,i,2+1])
         log10_h_new = ptas[-1][0][gwb_on].params[4].sample()
+        log10_h_cross_new = ptas[-1][0][gwb_on].params[5].sample()
+        phase0_new = ptas[-1][0][gwb_on].params[6].sample()
+        phase0_cross_new = ptas[-1][0][gwb_on].params[7].sample()
 
         wavelet_select = np.random.randint(n_wavelet)
 
         samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
         new_point = np.copy(samples_current)
-        new_point[wavelet_select*8:(wavelet_select+1)*8] = np.array([cos_gwtheta_old, epsilon_old, gwphi_old, log_f0_new,
-                                                                     log10_h_new, phase0_new, t0_new, tau_new])
+        new_point[wavelet_select*10:(wavelet_select+1)*10] = np.array([cos_gwtheta_old, psi_old, gwphi_old, log_f0_new,
+                                                                     log10_h_new, log10_h_cross_new, phase0_new, phase0_cross_new, t0_new, tau_new])
 
         log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
         log_L = log_acc_ratio
@@ -1103,9 +1108,9 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
         #getting ratio of proposal densities!
-        tau_old = samples[j,i,2+7+wavelet_select*8]
-        f0_old = 10**samples[j,i,2+3+wavelet_select*8]
-        t0_old = samples[j,i,2+6+wavelet_select*8]
+        tau_old = samples[j,i,2+9+wavelet_select*10]
+        f0_old = 10**samples[j,i,2+3+wavelet_select*10]
+        t0_old = samples[j,i,2+8+wavelet_select*10]
 
         tau_idx_old = np.digitize(tau_old, np.array(TAU_list)) - 1
         f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
@@ -1113,16 +1118,18 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
 
         tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
         
-        log10_h_old = samples[j,i,2+4+wavelet_select*8]
+        log10_h_old = samples[j,i,2+4+wavelet_select*10]
+        log10_h_cross_old = samples[j,i,2+5+wavelet_select*10]
         hastings_extra_factor = ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new)
+        hastings_extra_factor *= ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_old) / ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_new)
 
         acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * hastings_extra_factor
         if np.random.uniform()<=acc_ratio:
             samples[j,i+1,0] = n_wavelet
             samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
-            samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
+            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
             a_yes[3,j]+=1
             log_likelihood[j,i+1] = log_L
         else:
@@ -1197,14 +1204,14 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
 
         if what_to_vary == 'WAVE':
             wavelet_select = np.random.randint(n_wavelet)
-            jump_select = np.random.randint(8)
+            jump_select = np.random.randint(10)
             jump_1wavelet = eig[j,wavelet_select,jump_select,:]
             jump = np.zeros(samples_current.size)
-            #change intrinsic parameters of selected wavelet
-            jump[wavelet_select*8:(wavelet_select+1)*8] = jump_1wavelet
-            #and change sky location and ellipticity of all wavelets
+            #change intrinsic (and extrinsic) parameters of selected wavelet
+            jump[wavelet_select*10:(wavelet_select+1)*10] = jump_1wavelet
+            #and change sky location and polarization angle of all wavelets
             for which_wavelet in range(n_wavelet):
-                jump[which_wavelet*8:which_wavelet*8+3] = jump_1wavelet[:3]
+                jump[which_wavelet*10:which_wavelet*10+3] = jump_1wavelet[:3]
             #print('cw')
             #print(jump)
         elif what_to_vary == 'GLITCH':
@@ -1215,7 +1222,7 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
             #print(jump.shape)
             #print(jump[n_wavelet*8+glitch_select*6:n_wavelet*8+(glitch_select+1)*6].shape)
             #print(jump_1glitch.shape)
-            jump[n_wavelet*8+glitch_select*6:n_wavelet*8+(glitch_select+1)*6] = jump_1glitch
+            jump[n_wavelet*10+glitch_select*6:n_wavelet*10+(glitch_select+1)*6] = jump_1glitch
         elif what_to_vary == 'GWB':
             if include_gwb:
                 jump_select = np.random.randint(3)
@@ -1225,9 +1232,9 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
             if gwb_on==0 and include_gwb:
                 jump_gwb[-1] = 0
             if include_gwb:
-                jump = np.array([jump_gwb[int(i-n_wavelet*8-n_glitch*6-len(ptas[n_wavelet][0][gwb_on].pulsars))] if i>=n_wavelet*8+n_glitch*6+len(ptas[n_wavelet][0][gwb_on].pulsars) and i<n_wavelet*8+n_glitch*6+num_noise_params+1 else 0.0 for i in range(samples_current.size)])
+                jump = np.array([jump_gwb[int(i-n_wavelet*10-n_glitch*6-len(ptas[n_wavelet][0][gwb_on].pulsars))] if i>=n_wavelet*10+n_glitch*6+len(ptas[n_wavelet][0][gwb_on].pulsars) and i<n_wavelet*10+n_glitch*6+num_noise_params+1 else 0.0 for i in range(samples_current.size)])
             else:
-                jump = np.array([jump_gwb[int(i-n_wavelet*8-n_glitch*6-len(ptas[n_wavelet][0][gwb_on].pulsars))] if i>=n_wavelet*8+n_glitch*6+len(ptas[n_wavelet][0][gwb_on].pulsars) and i<n_wavelet*8+n_glitch*6+num_noise_params else 0.0 for i in range(samples_current.size)])
+                jump = np.array([jump_gwb[int(i-n_wavelet*10-n_glitch*6-len(ptas[n_wavelet][0][gwb_on].pulsars))] if i>=n_wavelet*10+n_glitch*6+len(ptas[n_wavelet][0][gwb_on].pulsars) and i<n_wavelet*10+n_glitch*6+num_noise_params else 0.0 for i in range(samples_current.size)])
             #if j==0: print('gwb+rn')
             #if j==0: print(i)
             #if j==0: print(jump)
@@ -1250,9 +1257,9 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
             #if j==0: print("ohh jeez")
             samples[j,i+1,0] = n_wavelet
             samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
-            samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
+            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
             a_yes[5,j]+=1
             log_likelihood[j,i+1] = log_L
         else:
@@ -1339,7 +1346,7 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
         jump_select = np.random.randint(len(ptas[n_wavelet][0][gwb_on].pulsars))
         #print(jump_select)
         jump_wn = eig_wn[j,jump_select,:]
-        jump = np.array([jump_wn[int(i-n_wavelet*8-n_glitch*6)] if i>=n_wavelet*8+n_glitch*6 and i<n_wavelet*8+n_glitch*6+len(ptas[n_wavelet][0][gwb_on].pulsars) else 0.0 for i in range(samples_current.size)])
+        jump = np.array([jump_wn[int(i-n_wavelet*10-n_glitch*6)] if i>=n_wavelet*10+n_glitch*6 and i<n_wavelet*10+n_glitch*6+len(ptas[n_wavelet][0][gwb_on].pulsars) else 0.0 for i in range(samples_current.size)])
         #if j==0: print('noise')
         #if j==0: print(jump)
 
@@ -1357,9 +1364,9 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
             #if j==0: print("Ohhhh")
             samples[j,i+1,0] = n_wavelet
             samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*8] = new_point[:n_wavelet*8]
-            samples[j,i+1,2+max_n_wavelet*8:2+max_n_wavelet*8+n_glitch*6] = new_point[n_wavelet*8:n_wavelet*8+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*8+max_n_glitch*6:] = new_point[n_wavelet*8+n_glitch*6:]
+            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
             a_yes[6,j]+=1
             log_likelihood[j,i+1] = log_L
         else:
@@ -1373,7 +1380,7 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
 #FISHER EIGENVALUE CALCULATION
 #
 ################################################################################
-def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=8, offset=0, use_prior=False):
+def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=10, offset=0, use_prior=False):
     n_source=n_wavelet
     fisher = np.zeros((n_source,dim,dim))
     eig = []
@@ -1578,19 +1585,22 @@ def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, incl
         log10_f0 = parameter.Uniform(np.log10(3.5e-9), -7)(str(i)+'_'+'log10_f0')
         cos_gwtheta = parameter.Uniform(-1, 1)(str(i)+'_'+'cos_gwtheta')
         gwphi = parameter.Uniform(0, 2*np.pi)(str(i)+'_'+'gwphi')
+        psi = parameter.Uniform(0, np.pi)(str(i)+'_'+'gw_psi')
         phase0 = parameter.Uniform(0, 2*np.pi)(str(i)+'_'+'phase0')
-        epsilon = parameter.Uniform(0, 1.0)(str(i)+'_'+'epsilon')
+        phase0_cross = parameter.Uniform(0, 2*np.pi)(str(i)+'_'+'phase0_cross')
         tau = parameter.Uniform(0.2, 5)(str(i)+'_'+'tau')
         t0 = parameter.Uniform(0.0, t0_max)(str(i)+'_'+'t0')
         if wavelet_amp_prior == 'log-uniform':
             log10_h = parameter.Uniform(wavelet_log_amp_range[0], wavelet_log_amp_range[1])(str(i)+'_'+'log10_h')
+            log10_h_cross = parameter.Uniform(wavelet_log_amp_range[0], wavelet_log_amp_range[1])(str(i)+'_'+'log10_h_cross')
         elif wavelet_amp_prior == 'uniform':
             log10_h = parameter.LinearExp(wavelet_log_amp_range[0], wavelet_log_amp_range[1])(str(i)+'_'+'log10_h')
+            log10_h_cross = parameter.LinearExp(wavelet_log_amp_range[0], wavelet_log_amp_range[1])(str(i)+'_'+'log10_h_cross')
         else:
             print("CW amplitude prior of {0} not available".format(cw_amp_prior))
-        wavelet_wf = models.wavelet_delay(cos_gwtheta=cos_gwtheta, gwphi=gwphi, log10_h = log10_h,
-                                          tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0,
-                                          epsilon = epsilon, tref=53000*86400)
+        wavelet_wf = models.wavelet_delay(cos_gwtheta=cos_gwtheta, gwphi=gwphi, log10_h = log10_h, log10_h2=log10_h_cross,
+                                          tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0, phase02=phase0_cross,
+                                          epsilon = None, psi=psi, tref=53000*86400)
         wavelets.append(deterministic_signals.Deterministic(wavelet_wf, name='wavelet'+str(i)))
 
     #glitch models
@@ -1671,10 +1681,10 @@ def get_prior_recovery_pta(pta):
 #
 ################################################################################
 def get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params):
-    return int(samples[j,i,2+max_n_wavelet*8+max_n_glitch*6+num_noise_params]!=0.0)
+    return int(samples[j,i,2+max_n_wavelet*10+max_n_glitch*6+num_noise_params]!=0.0)
 
 def strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch):
-    return np.delete(samples[j,i,2:], list(range(n_wavelet*8,max_n_wavelet*8))+list(range(max_n_wavelet*8+n_glitch*6,max_n_wavelet*8+max_n_glitch*6)) )
+    return np.delete(samples[j,i,2:], list(range(n_wavelet*10,max_n_wavelet*10))+list(range(max_n_wavelet*10+n_glitch*6,max_n_wavelet*10+max_n_glitch*6)) )
 
 def get_n_wavelet(samples, j, i):
     return int(samples[j,i,0])
