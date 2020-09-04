@@ -35,11 +35,11 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
                vary_white_noise=False, efac_start=1.0,
                include_gwb=False, gwb_switch_weight=0,
                include_rn=False, vary_rn=False, rn_params=[-13.0,1.0], jupyter_notebook=False, gwb_on_prior=0.5,
-               max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_max=10.0,
+               max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_max=10.0, tref=53000*86400,
                glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None,
                save_every_n=10000, savefile=None):
     
-    ptas = get_ptas(pulsars, vary_white_noise=vary_white_noise, include_rn=include_rn, vary_rn=vary_rn, include_gwb=include_gwb, max_n_wavelet=max_n_wavelet, efac_start=efac_start, rn_amp_prior=rn_amp_prior, rn_log_amp_range=rn_log_amp_range, rn_params=rn_params, gwb_amp_prior=gwb_amp_prior, gwb_log_amp_range=gwb_log_amp_range, wavelet_amp_prior=wavelet_amp_prior, wavelet_log_amp_range=wavelet_log_amp_range, prior_recovery=prior_recovery, max_n_glitch=max_n_glitch, glitch_amp_prior=glitch_amp_prior, glitch_log_amp_range=glitch_log_amp_range, t0_max=t0_max)
+    ptas = get_ptas(pulsars, vary_white_noise=vary_white_noise, include_rn=include_rn, vary_rn=vary_rn, include_gwb=include_gwb, max_n_wavelet=max_n_wavelet, efac_start=efac_start, rn_amp_prior=rn_amp_prior, rn_log_amp_range=rn_log_amp_range, rn_params=rn_params, gwb_amp_prior=gwb_amp_prior, gwb_log_amp_range=gwb_log_amp_range, wavelet_amp_prior=wavelet_amp_prior, wavelet_log_amp_range=wavelet_log_amp_range, prior_recovery=prior_recovery, max_n_glitch=max_n_glitch, glitch_amp_prior=glitch_amp_prior, glitch_log_amp_range=glitch_log_amp_range, t0_max=t0_max, tref=tref)
 
     print(ptas)
     for i in range(len(ptas)):
@@ -1515,7 +1515,7 @@ def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, d
 #FUNCTION TO EASILY SET UP A LIST OF PTA OBJECTS
 #
 ################################################################################
-def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, include_gwb=True, max_n_wavelet=1, efac_start=1.0, rn_amp_prior='uniform', rn_log_amp_range=[-18,-11], rn_params=[-13.0,1.0], gwb_amp_prior='uniform', gwb_log_amp_range=[-18,-11], wavelet_amp_prior='uniform', wavelet_log_amp_range=[-18,-11], prior_recovery=False, max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], t0_max=10.0):
+def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, include_gwb=True, max_n_wavelet=1, efac_start=1.0, rn_amp_prior='uniform', rn_log_amp_range=[-18,-11], rn_params=[-13.0,1.0], gwb_amp_prior='uniform', gwb_log_amp_range=[-18,-11], wavelet_amp_prior='uniform', wavelet_log_amp_range=[-18,-11], prior_recovery=False, max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], t0_max=10.0, tref=53000*86400):
     #setting up base model
     if vary_white_noise:
         efac = parameter.Uniform(0.01, 10.0)
@@ -1600,7 +1600,7 @@ def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, incl
             print("CW amplitude prior of {0} not available".format(cw_amp_prior))
         wavelet_wf = models.wavelet_delay(cos_gwtheta=cos_gwtheta, gwphi=gwphi, log10_h = log10_h, log10_h2=log10_h_cross,
                                           tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0, phase02=phase0_cross,
-                                          epsilon = None, psi=psi, tref=53000*86400)
+                                          epsilon = None, psi=psi, tref=tref)
         wavelets.append(deterministic_signals.Deterministic(wavelet_wf, name='wavelet'+str(i)))
 
     #glitch models
@@ -1617,7 +1617,7 @@ def get_ptas(pulsars, vary_white_noise=True, include_rn=True, vary_rn=True, incl
             log10_h = parameter.LinearExp(glitch_log_amp_range[0], glitch_log_amp_range[1])("Glitch_"+str(i)+'_'+'log10_h')
         else:
             print("Glitch amplitude prior of {0} not available".format(glitch_amp_prior))
-        glitch_wf = models.glitch_delay(log10_h = log10_h, tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0, tref=53000*86400,
+        glitch_wf = models.glitch_delay(log10_h = log10_h, tau = tau, log10_f0 = log10_f0, t0 = t0, phase0 = phase0, tref=tref,
                                         psr_float_idx = psr_idx, pulsars=pulsars)
         glitches.append(deterministic_signals.Deterministic(glitch_wf, name='Glitch'+str(i) ))
     
