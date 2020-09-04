@@ -75,7 +75,7 @@ class TauScan(object):
         
         return Nmats
 
-    def compute_TauScan(self, tau, t0, f0):
+    def compute_TauScan(self, tau, t0, f0, tref=53000*86400):
         """
         Computes the Tau-scans.
         :param tau: tau of wavelet to use
@@ -85,8 +85,6 @@ class TauScan(object):
         tau_scan: value of tau-scan at given tau, t0, f0 (map can be produced by looping over these
         """
 
-        tref=53000*86400
-        
         phiinvs = self.pta.get_phiinv(self.params, logdet=False)
         TNTs = self.pta.get_TNT(self.params)
         Ts = self.pta.get_basis()
@@ -182,7 +180,7 @@ def make_Nmat(phiinv, TNT, Nvec, T):
     return Ndiag - np.dot(TtN.T,expval2)
 
 
-def make_tau_scan_map(TauScan, n_tau=5, f_min=None, f_max=None, t_min=None, t_max=None, tau_min=None, tau_max=None):
+def make_tau_scan_map(TauScan, n_tau=5, f_min=None, f_max=None, t_min=None, t_max=None, tau_min=None, tau_max=None, tref=53000*86400):
     """
         Produce Tau-scan 3D (tau, t0, f0) map
         
@@ -252,7 +250,7 @@ def make_tau_scan_map(TauScan, n_tau=5, f_min=None, f_max=None, t_min=None, t_ma
             for j, t0 in enumerate(t0s):
                 #COS, SIN = TauScan.compute_TauScan(tau, t0, f0)
                 #TS[i,j] = COS**2 + SIN**2
-                TS[i,j] = TauScan.compute_TauScan(tau, t0, f0)
+                TS[i,j] = TauScan.compute_TauScan(tau, t0, f0, tref=tref)
         tau_scan.append(TS)
 
     return {'tau_scan':tau_scan, 'tau_edges':tau_edges, 't0_edges':T0_list, 'f0_edges':F0_list}
