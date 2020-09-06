@@ -285,6 +285,11 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
             print(norm)
 
             tau_scan_limit = 0.1#0 #--start form 1 to avoid having zeros in the proposal
+            #check if we've read in a tau-scan file
+            if tau_scan_proposal_weight+RJ_weight<=0:
+                #make fake tau_scan_data to use in next step
+                tau_scan_data = {}
+                tau_scan_data['tau_scan'] = [ggg*0.0 for ggg in glitch_tau_scan]
             for g_TS, TS in zip(glitch_tau_scan, tau_scan_data['tau_scan']):
                 TS_max = np.max( g_TS - TS/np.sqrt(float(len(pulsars))) )
                 if TS_max>tau_scan_limit:
@@ -741,7 +746,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         tau_scan_old_point = tau_scan_old[tau_idx_old][f0_idx_old, t0_idx_old]
         
         log10_h_old = samples[j,i,2+max_n_wavelet*10+glitch_select*6+1]
-        hastings_extra_factor = ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new)
+        hastings_extra_factor = ptas[0][-1][gwb_on].params[1].get_pdf(log10_h_old) / ptas[0][-1][gwb_on].params[1].get_pdf(log10_h_new)
     
         acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * (tau_scan_limit/tau_scan_limit_old) * hastings_extra_factor
         #if j==0:
