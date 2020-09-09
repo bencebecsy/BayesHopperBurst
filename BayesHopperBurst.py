@@ -323,6 +323,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
     #setting up arrays to record acceptance and swaps
     a_yes=np.zeros((7, n_chain)) #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, PT, fisher, noise_jump)
     a_no=np.zeros((7, n_chain))
+    acc_fraction = a_yes/(a_no+a_yes)
     if resume_from is None:
         swap_record = []
     rj_record = []
@@ -356,7 +357,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
         #write results to file every save_every_n iterations
         #
         ########################################################
-        if savefile is not None and i%save_every_n==0 and i!=0:
+        if savefile is not None and i%save_every_n==0 and i!=start_iter:
             np.savez(savefile, samples=samples[:,:i,:], acc_fraction=acc_fraction, swap_record=swap_record, log_likelihood=log_likelihood[:,:i])
         ########################################################
         #
