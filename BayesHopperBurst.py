@@ -50,7 +50,8 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
                 print(i,j,k)
                 print(ptas[i][j][k].params)
                 #point_to_test = np.tile(np.array([0.0, 0.54, 1.0, -8.0, -13.39, 2.0, 0.5]),i+1)
-                #print(PTA.summary())
+    
+    print(ptas[-1][-1][-1].summary())
 
     #fisher updating every n_fish_update step
     n_fish_update = 200 #50
@@ -1597,6 +1598,8 @@ def get_ptas(pulsars, vary_white_noise=True, include_equad_ecorr=False, wn_backe
     tm = gp_signals.TimingModel(use_svd=True)
 
     base_model = ef + tm
+    if include_equad_ecorr:
+        base_model = base_model + eq + ec
 
     #adding per psr RN if included
     if include_per_psr_rn:
