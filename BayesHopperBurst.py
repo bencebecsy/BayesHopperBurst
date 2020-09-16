@@ -28,7 +28,7 @@ import pickle
 #
 ################################################################################
 
-def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='flat', n_wavelet_start='random', RJ_weight=0, glitch_RJ_weight=0,
+def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_wavelet_prior='flat', n_wavelet_start='random', RJ_weight=0, glitch_RJ_weight=0,
                regular_weight=3, noise_jump_weight=3, PT_swap_weight=1, T_ladder = None,
                tau_scan_proposal_weight=0, tau_scan_file=None, draw_from_prior_weight=0,
                de_weight=0, prior_recovery=False, wavelet_amp_prior='uniform', gwb_amp_prior='uniform', rn_amp_prior='uniform', per_psr_rn_amp_prior='uniform',
@@ -77,7 +77,9 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
     #set up and print out prior on number of wavelets
     if max_n_wavelet!=0:
         if n_wavelet_prior=='flat':
-            n_wavelet_prior = np.ones(max_n_wavelet+1)/(max_n_wavelet+1)
+            n_wavelet_prior = np.ones(max_n_wavelet+1)/(max_n_wavelet+1-min_n_wavelet)
+            for i in range(min_n_wavelet):
+                n_wavelet_prior[i] = 0.0
         else:
             n_wavelet_prior = np.array(n_wavelet_prior)
             n_wavelet_norm = np.sum(n_wavelet_prior)
@@ -143,7 +145,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, n_wavelet_prior='fla
         for j in range(n_chain):
             #set up n_wavelet
             if n_wavelet_start is 'random':
-                n_wavelet = np.random.choice(max_n_wavelet+1)
+                n_wavelet = np.random.choice( np.arange(min_n_wavelet,max_n_wavelet+1) )
             else:
                 n_wavelet = n_wavelet_start
             #set up n_glitch
@@ -478,7 +480,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
             do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood)
         #do RJ move
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability):
-            do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood)
+            do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood)
         #do GWB switch move
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability+gwb_switch_probability):
             gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, gwb_on_prior, gwb_log_amp_range, log_likelihood)
@@ -827,7 +829,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
 #REVERSIBLE-JUMP (RJ, aka TRANS-DIMENSIONAL) MOVE -- adding or removing a wavelet
 #
 ################################################################################
-def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood):
+def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood):
     #print("RJ")
     tau_scan = tau_scan_data['tau_scan']
 
@@ -860,7 +862,7 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
         add_prob = 0.5 #same propability of addind and removing
         #decide if we add or remove a signal
         direction_decide = np.random.uniform()
-        if n_wavelet==0 or (direction_decide<add_prob and n_wavelet!=max_n_wavelet): #adding a wavelet------------------------------------------------------
+        if n_wavelet==min_n_wavelet or (direction_decide<add_prob and n_wavelet!=max_n_wavelet): #adding a wavelet------------------------------------------------------
             if j==0: rj_record.append(1)
             #if j==0: print("Propose to add a wavelet")
 
@@ -938,7 +940,7 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
 
             acc_ratio = np.exp(log_acc_ratio)/prior_ext/tau_scan_new_point_normalized
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
-            if n_wavelet==0:
+            if n_wavelet==min_n_wavelet:
                 acc_ratio *= 0.5
             if n_wavelet==max_n_wavelet-1:
                 acc_ratio *= 2.0
@@ -968,7 +970,7 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
                 a_no[2,j] += 1
                 log_likelihood[j,i+1] = log_likelihood[j,i]
 
-        elif n_wavelet==max_n_wavelet or (direction_decide>add_prob and n_wavelet!=0):   #removing a wavelet----------------------------------------------------------
+        elif n_wavelet==max_n_wavelet or (direction_decide>add_prob and n_wavelet!=min_n_wavelet):   #removing a wavelet----------------------------------------------------------
             if j==0: rj_record.append(-1)
             #if j==0: print("Propose to remove a wavelet")
             #choose which wavelet to remove
@@ -1032,7 +1034,7 @@ def do_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samp
 
             acc_ratio = np.exp(log_acc_ratio)*prior_ext*tau_scan_old_point_normalized
             #correction close to edge based on eqs. (40) and (41) of Sambridge et al. Geophys J. Int. (2006) 167, 528-542
-            if n_wavelet==1:
+            if n_wavelet==min_n_wavelet+1:
                 acc_ratio *= 2.0
             if n_wavelet==max_n_wavelet:
                 acc_ratio *= 0.5
