@@ -1578,12 +1578,14 @@ def get_ptas(pulsars, vary_white_noise=True, include_equad_ecorr=False, wn_backe
     #setting up base model
     if vary_white_noise:
         efac = parameter.Uniform(0.01, 10.0)
+        if include_equad_ecorr:
+            equad = parameter.Uniform(-8.5, -5)
+            ecorr = parameter.Uniform(-8.5, -5)
     else:
         efac = parameter.Constant(efac_start)
-    
-    if include_equad_ecorr:
-        equad = parameter.Constant()
-        ecorr = parameter.Constant()
+        if include_equad_ecorr:
+            equad = parameter.Constant()
+            ecorr = parameter.Constant()
 
     if wn_backend_selection:
         selection = selections.Selection(selections.by_backend)
