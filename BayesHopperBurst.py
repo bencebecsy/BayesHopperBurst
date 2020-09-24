@@ -38,10 +38,16 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                include_rn=False, vary_rn=False, num_wn_params=1, rn_params=[-13.0,1.0], include_per_psr_rn=False, vary_per_psr_rn=False, per_psr_rn_start_file=None,
                jupyter_notebook=False, gwb_on_prior=0.5,
                max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_max=10.0, tref=53000*86400,
-               glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None,
+               glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None,
                save_every_n=10000, savefile=None, resume_from=None):
+
+    if TF_prior_file is None:
+        TF_prior = None
+    else:
+        with open(TF_prior_file, 'rb') as f:
+            TF_prior = pickle.load(f)
     
-    ptas = get_ptas(pulsars, vary_white_noise=vary_white_noise, include_equad_ecorr=include_equad_ecorr, wn_backend_selection=wn_backend_selection, noisedict_file=noisedict_file, include_rn=include_rn, vary_rn=vary_rn, include_per_psr_rn=include_per_psr_rn, vary_per_psr_rn=vary_per_psr_rn, include_gwb=include_gwb, max_n_wavelet=max_n_wavelet, efac_start=efac_start, rn_amp_prior=rn_amp_prior, rn_log_amp_range=rn_log_amp_range, rn_params=rn_params, per_psr_rn_amp_prior=per_psr_rn_amp_prior, per_psr_rn_log_amp_range=per_psr_rn_log_amp_range, gwb_amp_prior=gwb_amp_prior, gwb_log_amp_range=gwb_log_amp_range, wavelet_amp_prior=wavelet_amp_prior, wavelet_log_amp_range=wavelet_log_amp_range, prior_recovery=prior_recovery, max_n_glitch=max_n_glitch, glitch_amp_prior=glitch_amp_prior, glitch_log_amp_range=glitch_log_amp_range, t0_max=t0_max, tref=tref)
+    ptas = get_ptas(pulsars, vary_white_noise=vary_white_noise, include_equad_ecorr=include_equad_ecorr, wn_backend_selection=wn_backend_selection, noisedict_file=noisedict_file, include_rn=include_rn, vary_rn=vary_rn, include_per_psr_rn=include_per_psr_rn, vary_per_psr_rn=vary_per_psr_rn, include_gwb=include_gwb, max_n_wavelet=max_n_wavelet, efac_start=efac_start, rn_amp_prior=rn_amp_prior, rn_log_amp_range=rn_log_amp_range, rn_params=rn_params, per_psr_rn_amp_prior=per_psr_rn_amp_prior, per_psr_rn_log_amp_range=per_psr_rn_log_amp_range, gwb_amp_prior=gwb_amp_prior, gwb_log_amp_range=gwb_log_amp_range, wavelet_amp_prior=wavelet_amp_prior, wavelet_log_amp_range=wavelet_log_amp_range, prior_recovery=prior_recovery, max_n_glitch=max_n_glitch, glitch_amp_prior=glitch_amp_prior, glitch_log_amp_range=glitch_log_amp_range, t0_max=t0_max, TF_prior=TF_prior, tref=tref)
 
     print(ptas)
     for i in range(len(ptas)):
@@ -1574,7 +1580,7 @@ def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, d
 #FUNCTION TO EASILY SET UP A LIST OF PTA OBJECTS
 #
 ################################################################################
-def get_ptas(pulsars, vary_white_noise=True, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None, include_rn=True, vary_rn=True, include_per_psr_rn=False, vary_per_psr_rn=False, include_gwb=True, max_n_wavelet=1, efac_start=1.0, rn_amp_prior='uniform', rn_log_amp_range=[-18,-11], rn_params=[-13.0,1.0], gwb_amp_prior='uniform', gwb_log_amp_range=[-18,-11], wavelet_amp_prior='uniform', wavelet_log_amp_range=[-18,-11], per_psr_rn_amp_prior='uniform', per_psr_rn_log_amp_range=[-18,-11], prior_recovery=False, max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], t0_max=10.0, tref=53000*86400):
+def get_ptas(pulsars, vary_white_noise=True, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None, include_rn=True, vary_rn=True, include_per_psr_rn=False, vary_per_psr_rn=False, include_gwb=True, max_n_wavelet=1, efac_start=1.0, rn_amp_prior='uniform', rn_log_amp_range=[-18,-11], rn_params=[-13.0,1.0], gwb_amp_prior='uniform', gwb_log_amp_range=[-18,-11], wavelet_amp_prior='uniform', wavelet_log_amp_range=[-18,-11], per_psr_rn_amp_prior='uniform', per_psr_rn_log_amp_range=[-18,-11], prior_recovery=False, max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], t0_max=10.0, TF_prior=None, tref=53000*86400):
     #setting up base model
     if vary_white_noise:
         efac = parameter.Uniform(0.01, 10.0)
@@ -1744,15 +1750,24 @@ def get_ptas(pulsars, vary_white_noise=True, include_equad_ecorr=False, wn_backe
 
                 #set the likelihood to unity if we are in prior recovery mode
                 if prior_recovery:
-                    gwb_sub_ptas.append(get_prior_recovery_pta(signal_base.PTA(model)))
+                    if TF_prior is None:
+                        gwb_sub_ptas.append(get_prior_recovery_pta(signal_base.PTA(model)))
+                    else:
+                        gwb_sub_ptas.append(get_tf_prior_pta(signal_base.PTA(model), TF_prior, n_wavelet, prior_recovery=True))
                 elif noisedict_file is not None:
                     with open(noisedict_file, 'r') as fp:
                         noisedict = json.load(fp)
                         pta = signal_base.PTA(model)
                         pta.set_default_params(noisedict)
-                        gwb_sub_ptas.append(pta)
+                        if TF_prior is None:
+                            gwb_sub_ptas.append(pta)
+                        else:
+                            gwb_sub_ptas.append(get_tf_prior_pta(pta, TF_prior, n_wavelet))
                 else:
-                    gwb_sub_ptas.append(signal_base.PTA(model))
+                    if TF_prior is None:
+                        gwb_sub_ptas.append(signal_base.PTA(model))
+                    else:
+                        gwb_sub_ptas.append(get_tf_prior_pta(signal_base.PTA(model), TF_prior, n_wavelet))
 
             glitch_sub_ptas.append(gwb_sub_ptas)
 
@@ -1777,6 +1792,41 @@ def get_prior_recovery_pta(pta):
             return self.pta.get_lnprior(x)
 
     return prior_recovery_pta(pta)
+
+################################################################################
+#
+#MAKE PTA OBJECT WITH CUSTOM T0-F0 PRIOR FOR ZOOM-IN RERUNS
+#
+################################################################################
+def get_tf_prior_pta(pta, TF_prior, n_wavelet, prior_recovery=False):
+    class tf_prior_pta:
+        def __init__(self, pta):
+            self.pta = pta
+            self.params = pta.params
+            self.pulsars = pta.pulsars
+            self.summary = pta.summary
+        def get_lnlikelihood(self, x):
+            if prior_recovery:
+                return 0.0
+            else:
+                return self.pta.get_lnlikelihood(x)
+        def get_lnprior(self, x):
+            within_prior = True
+            for i in range(n_wavelet):
+                t0 = x[8+10*i]
+                log10_f0 = x[3+10*i]
+                #print(t0, log10_f0)
+                t_idx = int( np.digitize(t0, TF_prior['t_bins']) )
+                f_idx = int( np.digitize(log10_f0, TF_prior['lf_bins']) )
+                #print((t_idx, f_idx))
+                if (t_idx, f_idx) not in TF_prior['on_idxs']:
+                    within_prior = False
+            if within_prior:
+                return self.pta.get_lnprior(x)
+            else:
+                return -np.inf
+
+    return tf_prior_pta(pta)
 
 ################################################################################
 #
