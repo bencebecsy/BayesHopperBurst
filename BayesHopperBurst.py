@@ -862,13 +862,20 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
 
     if parallel:
         num_cores = multiprocessing.cpu_count()
-        samples_new = Parallel(n_jobs=num_cores)(delayed(rj_move_core)(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood) for j in range(n_chain))
+        rrr = Parallel(n_jobs=num_cores)(delayed(rj_move_core)(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood) for j in range(n_chain))
+        samples_new, log_L, yes_or_no = zip(*rrr)
         #print(samples_new)
     else:
-        samples_new = [rj_move_core(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood) for j in range(n_chain)]
+        rrr = [rj_move_core(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood) for j in range(n_chain)]
+        samples_new, log_L, yes_or_no = zip(*rrr)
 
     for j in range(n_chain):
-        samples[j, i+1, :] = samples_new[j]
+        samples[j,i+1,:] = samples_new[j]
+        log_likelihood[j,i+1] = log_L[j]
+        if yes_or_no[j]==1:
+            a_yes[2,j] += 1
+        else:
+            a_no[2,j] += 1
 
 #core jump function
 def rj_move_core(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood):
@@ -987,15 +994,17 @@ def rj_move_core(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior,
             samples_new[2:2+(n_wavelet+1)*10] = new_point[:(n_wavelet+1)*10]
             samples_new[2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[(n_wavelet+1)*10:(n_wavelet+1)*10+n_glitch*6]
             samples_new[2+max_n_wavelet*10+max_n_glitch*6:] = new_point[(n_wavelet+1)*10+n_glitch*6:]
-            a_yes[2,j] += 1
-            log_likelihood[j,i+1] = log_L
+            #a_yes[2,j] += 1
+            #log_likelihood[j,i+1] = log_L
+            yes_or_no = 1
         else:
             #samples[j,i+1,:] = samples[j,i,:]
-            a_no[2,j] += 1
-            log_likelihood[j,i+1] = log_likelihood[j,i]
+            #a_no[2,j] += 1
+            log_L = log_likelihood[j,i]
             samples_new = np.copy(samples[j,i,:])
+            yes_or_no = 0
         
-        return samples_new
+        return samples_new, log_L, yes_or_no
 
     elif n_wavelet==max_n_wavelet or (direction_decide>add_prob and n_wavelet!=min_n_wavelet):   #removing a wavelet----------------------------------------------------------
         if j==0: rj_record.append(-1)
@@ -1085,15 +1094,17 @@ def rj_move_core(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior,
             samples_new[2:2+(n_wavelet-1)*10] = new_point[:(n_wavelet-1)*10]
             samples_new[2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[(n_wavelet-1)*10:(n_wavelet-1)*10+n_glitch*6]
             samples_new[2+max_n_wavelet*10+max_n_glitch*6:] = new_point[(n_wavelet-1)*10+n_glitch*6:]
-            a_yes[2,j] += 1
-            log_likelihood[j,i+1] = log_L
+            #a_yes[2,j] += 1
+            #log_likelihood[j,i+1] = log_L
+            yes_or_no = 1
         else:
             #samples[j,i+1,:] = samples[j,i,:]
             samples_new = np.copy(samples[j,i,:])
-            a_no[2,j] += 1
-            log_likelihood[j,i+1] = log_likelihood[j,i]
+            #a_no[2,j] += 1
+            log_L = log_likelihood[j,i]
+            yes_or_no = 0
 
-        return samples_new
+        return samples_new, log_L, yes_or_no
 
 
 ################################################################################
