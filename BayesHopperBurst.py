@@ -490,7 +490,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
             do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, swap_record, vary_white_noise, include_gwb, num_noise_params, log_likelihood)
         #global proposal based on tau_scan
         elif jump_decide<swap_probability+tau_scan_proposal_probability:
-            do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood)
+            do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood, parallel)
         #do RJ move
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability):
             do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior, ptas, samples, i, Ts, a_yes, a_no, rj_record, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood, parallel)
@@ -499,7 +499,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
             gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, gwb_on_prior, gwb_log_amp_range, log_likelihood)
         #do noise jump
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability+gwb_switch_probability+noise_jump_probability):
-            noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood)
+            noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood, parallel)
         #glitch model global proposal based on tau_scan
         elif (jump_decide<swap_probability+tau_scan_proposal_probability+RJ_probability+gwb_switch_probability+noise_jump_probability+glitch_tau_scan_proposal_probability):
             do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, glitch_tau_scan_data, log_likelihood)
@@ -508,7 +508,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
             do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, glitch_tau_scan_data, log_likelihood)
         #regular step
         else:
-            regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood)
+            regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood, parallel)
         #print(samples[0,i+1,:])
         #print("-"*50)
 
@@ -1112,7 +1112,7 @@ def rj_move_core(j, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_prior,
 #GLOBAL PROPOSAL BASED ON TAU-SCAN
 #
 ################################################################################
-def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood):
+def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, log_likelihood, parallel):
     #print("TAU-GLOBAL")
     tau_scan = tau_scan_data['tau_scan']
     #print(i)
@@ -1139,104 +1139,127 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
     #print(samples[0,i,:])
     #print(i)
 
+    if parallel:
+        num_cores = multiprocessing.cpu_count()
+        rrr = Parallel(n_jobs=num_cores)(delayed(tau_scan_move_core)(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood) for j in range(n_chain))
+        samples_new, log_L, yes_or_no = zip(*rrr)
+        #print(samples_new)
+    else:
+        rrr = [tau_scan_move_core(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood) for j in range(n_chain)]
+        samples_new, log_L, yes_or_no = zip(*rrr)
+
     for j in range(n_chain):
-        #check if there's any wavelet -- stay at given point if not
-        n_wavelet = get_n_wavelet(samples, j, i)
-        n_glitch = get_n_glitch(samples, j, i)
-        #if j==0:
-        #    print(n_wavelet)
-        #    print(n_glitch)
-        #    print(samples[j,i,:])
-        #print(n_wavelet)
-        if n_wavelet==0:
-            samples[j,i+1,:] = samples[j,i,:]
-            a_no[3,j]+=1
-            #print("No source to vary!")
-            continue
-
-        if include_gwb:
-            gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+        samples[j,i+1,:] = samples_new[j]
+        log_likelihood[j,i+1] = log_L[j]
+        if yes_or_no[j]==1:
+            a_yes[3,j] += 1
         else:
-            gwb_on = 0
+            a_no[3,j] += 1
 
-        log_f0_max = float(ptas[n_wavelet][0][gwb_on].params[3]._typename.split('=')[2][:-1])
-        log_f0_min = float(ptas[n_wavelet][0][gwb_on].params[3]._typename.split('=')[1].split(',')[0])
-        t0_max = float(ptas[n_wavelet][0][gwb_on].params[8]._typename.split('=')[2][:-1])
-        t0_min = float(ptas[n_wavelet][0][gwb_on].params[8]._typename.split('=')[1].split(',')[0])
-        tau_max = float(ptas[n_wavelet][0][gwb_on].params[9]._typename.split('=')[2][:-1])
-        tau_min = float(ptas[n_wavelet][0][gwb_on].params[9]._typename.split('=')[1].split(',')[0])
+def tau_scan_move_core(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, tau_scan_data, tau_scan, tau_scan_limit, TAU_list, F0_list, T0_list, log_likelihood):
+    #check if there's any wavelet -- stay at given point if not
+    n_wavelet = get_n_wavelet(samples, j, i)
+    n_glitch = get_n_glitch(samples, j, i)
+    #if j==0:
+    #    print(n_wavelet)
+    #    print(n_glitch)
+    #    print(samples[j,i,:])
+    #print(n_wavelet)
+    if n_wavelet==0:
+        samples_new = np.copy(samples[j,i,:])
+        #a_no[3,j]+=1
+        #print("No source to vary!")
+        yes_or_no = 0
+        log_L = log_likelihood[j,i]
 
-        accepted = False
-        while accepted==False:
-            log_f0_new = np.random.uniform(low=log_f0_min, high=log_f0_max)
-            t0_new = np.random.uniform(low=t0_min, high=t0_max)
-            tau_new = np.random.uniform(low=tau_min, high=tau_max)
+    if include_gwb:
+        gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+    else:
+        gwb_on = 0
 
-            tau_idx = np.digitize(tau_new, np.array(TAU_list)) - 1
-            f0_idx = np.digitize(10**log_f0_new, np.array(F0_list[tau_idx])) - 1
-            t0_idx = np.digitize(t0_new, np.array(T0_list[tau_idx])/(365.25*24*3600)) - 1
+    log_f0_max = float(ptas[n_wavelet][0][gwb_on].params[3]._typename.split('=')[2][:-1])
+    log_f0_min = float(ptas[n_wavelet][0][gwb_on].params[3]._typename.split('=')[1].split(',')[0])
+    t0_max = float(ptas[n_wavelet][0][gwb_on].params[8]._typename.split('=')[2][:-1])
+    t0_min = float(ptas[n_wavelet][0][gwb_on].params[8]._typename.split('=')[1].split(',')[0])
+    tau_max = float(ptas[n_wavelet][0][gwb_on].params[9]._typename.split('=')[2][:-1])
+    tau_min = float(ptas[n_wavelet][0][gwb_on].params[9]._typename.split('=')[1].split(',')[0])
 
-            #print(tau_new, t0_new, 10**log_f0_new)
-            #print(tau_idx, t0_idx, f0_idx)
+    accepted = False
+    while accepted==False:
+        log_f0_new = np.random.uniform(low=log_f0_min, high=log_f0_max)
+        t0_new = np.random.uniform(low=t0_min, high=t0_max)
+        tau_new = np.random.uniform(low=tau_min, high=tau_max)
 
-            tau_scan_new_point = tau_scan[tau_idx][f0_idx, t0_idx]
-            #print(tau_scan_new_point/tau_scan_limit)
-            if np.random.uniform()<(tau_scan_new_point/tau_scan_limit):
-                accepted = True
-                #print("Yeeeh!")
+        tau_idx = np.digitize(tau_new, np.array(TAU_list)) - 1
+        f0_idx = np.digitize(10**log_f0_new, np.array(F0_list[tau_idx])) - 1
+        t0_idx = np.digitize(t0_new, np.array(T0_list[tau_idx])/(365.25*24*3600)) - 1
 
-        #randomly select other parameters (except sky location and psi, which we won't change here)
-        #cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
-        cos_gwtheta_old = np.copy(samples[j,i,2+0])
-        gwphi_old = np.copy(samples[j,i,2+2])
-        psi_old = np.copy(samples[j,i,2+1])
-        log10_h_new = ptas[-1][0][gwb_on].params[4].sample()
-        log10_h_cross_new = ptas[-1][0][gwb_on].params[5].sample()
-        phase0_new = ptas[-1][0][gwb_on].params[6].sample()
-        phase0_cross_new = ptas[-1][0][gwb_on].params[7].sample()
+        #print(tau_new, t0_new, 10**log_f0_new)
+        #print(tau_idx, t0_idx, f0_idx)
 
-        wavelet_select = np.random.randint(n_wavelet)
+        tau_scan_new_point = tau_scan[tau_idx][f0_idx, t0_idx]
+        #print(tau_scan_new_point/tau_scan_limit)
+        if np.random.uniform()<(tau_scan_new_point/tau_scan_limit):
+            accepted = True
+            #print("Yeeeh!")
 
-        samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
-        new_point = np.copy(samples_current)
-        new_point[wavelet_select*10:(wavelet_select+1)*10] = np.array([cos_gwtheta_old, psi_old, gwphi_old, log_f0_new,
-                                                                     log10_h_new, log10_h_cross_new, phase0_new, phase0_cross_new, t0_new, tau_new])
+    #randomly select other parameters (except sky location and psi, which we won't change here)
+    #cos_gwtheta_new = ptas[-1][gwb_on].params[0].sample()
+    cos_gwtheta_old = np.copy(samples[j,i,2+0])
+    gwphi_old = np.copy(samples[j,i,2+2])
+    psi_old = np.copy(samples[j,i,2+1])
+    log10_h_new = ptas[-1][0][gwb_on].params[4].sample()
+    log10_h_cross_new = ptas[-1][0][gwb_on].params[5].sample()
+    phase0_new = ptas[-1][0][gwb_on].params[6].sample()
+    phase0_cross_new = ptas[-1][0][gwb_on].params[7].sample()
 
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
-        log_L = log_acc_ratio
-        log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
-        log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
+    wavelet_select = np.random.randint(n_wavelet)
 
-        #getting ratio of proposal densities!
-        tau_old = samples[j,i,2+9+wavelet_select*10]
-        f0_old = 10**samples[j,i,2+3+wavelet_select*10]
-        t0_old = samples[j,i,2+8+wavelet_select*10]
+    samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+    new_point = np.copy(samples_current)
+    new_point[wavelet_select*10:(wavelet_select+1)*10] = np.array([cos_gwtheta_old, psi_old, gwphi_old, log_f0_new,
+                                                                 log10_h_new, log10_h_cross_new, phase0_new, phase0_cross_new, t0_new, tau_new])
 
-        tau_idx_old = np.digitize(tau_old, np.array(TAU_list)) - 1
-        f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
-        t0_idx_old = np.digitize(t0_old, np.array(T0_list[tau_idx_old])/(365.25*24*3600)) - 1
+    log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+    log_L = log_acc_ratio
+    log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
+    log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+    log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
-        tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
-        
-        log10_h_old = samples[j,i,2+4+wavelet_select*10]
-        log10_h_cross_old = samples[j,i,2+5+wavelet_select*10]
-        hastings_extra_factor = ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new)
-        hastings_extra_factor *= ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_old) / ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_new)
+    #getting ratio of proposal densities!
+    tau_old = samples[j,i,2+9+wavelet_select*10]
+    f0_old = 10**samples[j,i,2+3+wavelet_select*10]
+    t0_old = samples[j,i,2+8+wavelet_select*10]
 
-        acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * hastings_extra_factor
-        if np.random.uniform()<=acc_ratio:
-            samples[j,i+1,0] = n_wavelet
-            samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
-            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
-            a_yes[3,j]+=1
-            log_likelihood[j,i+1] = log_L
-        else:
-            samples[j,i+1,:] = samples[j,i,:]
-            a_no[3,j]+=1
-            log_likelihood[j,i+1] = log_likelihood[j,i]
+    tau_idx_old = np.digitize(tau_old, np.array(TAU_list)) - 1
+    f0_idx_old = np.digitize(f0_old, np.array(F0_list[tau_idx_old])) - 1
+    t0_idx_old = np.digitize(t0_old, np.array(T0_list[tau_idx_old])/(365.25*24*3600)) - 1
+
+    tau_scan_old_point = tau_scan[tau_idx_old][f0_idx_old, t0_idx_old]
+    
+    log10_h_old = samples[j,i,2+4+wavelet_select*10]
+    log10_h_cross_old = samples[j,i,2+5+wavelet_select*10]
+    hastings_extra_factor = ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) / ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_new)
+    hastings_extra_factor *= ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_old) / ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_new)
+
+    acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * hastings_extra_factor
+    samples_new = np.zeros(samples.shape[2])
+    if np.random.uniform()<=acc_ratio:
+        samples_new[0] = n_wavelet
+        samples_new[1] = n_glitch
+        samples_new[2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+        samples_new[2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+        samples_new[2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
+        #a_yes[3,j]+=1
+        #log_likelihood[j,i+1] = log_L
+        yes_or_no = 1
+    else:
+        samples_new = np.copy(samples[j,i,:])
+        #a_no[3,j]+=1
+        log_L = log_likelihood[j,i]
+        yes_or_no = 0
+
+    return samples_new, log_L, yes_or_no
 
 
 ################################################################################
@@ -1244,129 +1267,153 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
 #REGULAR MCMC JUMP ROUTINE (JUMPING ALONG EIGENDIRECTIONS IN CW, GWB AND RN PARAMETERS)
 #
 ################################################################################
-def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood):
+def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood, parallel):
     #print("FISHER")
+
+    if parallel:
+        num_cores = multiprocessing.cpu_count()
+        rrr = Parallel(n_jobs=num_cores)(delayed(regular_move_core)(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood) for j in range(n_chain))
+        samples_new, log_L, yes_or_no = zip(*rrr)
+        #print(samples_new)
+    else:
+        rrr = [regular_move_core(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood) for j in range(n_chain)]
+        samples_new, log_L, yes_or_no = zip(*rrr)
+
     for j in range(n_chain):
-        n_wavelet = get_n_wavelet(samples, j, i)
-        n_glitch = get_n_glitch(samples, j, i)
-        #if j==0:
-        #    print(n_wavelet)
-        #    print(n_glitch)
-
-        if include_gwb:
-            gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+        samples[j,i+1,:] = samples_new[j]
+        log_likelihood[j,i+1] = log_L[j]
+        if yes_or_no[j]==1:
+            a_yes[5,j] += 1
         else:
-            gwb_on = 0
+            a_no[5,j] += 1
 
-        samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+def regular_move_core(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig, eig_glitch, eig_gwb_rn, include_gwb, num_noise_params, num_per_psr_params, vary_rn, log_likelihood):
+    n_wavelet = get_n_wavelet(samples, j, i)
+    n_glitch = get_n_glitch(samples, j, i)
+    #if j==0:
+    #    print(n_wavelet)
+    #    print(n_glitch)
 
-        #decide if moving in wavelet parameters, glitch parameters, or GWB/RN parameters
-        #case #1: we can vary any of them
-        if n_wavelet!=0 and n_glitch!=0 and (gwb_on==1 or vary_rn):
-            vary_decide = np.random.uniform()
-            if vary_decide <= 1.0/3.0:
-                what_to_vary = 'WAVE'
-            elif vary_decide <= 2.0/3.0:
-                what_to_vary = 'GLITCH'
-            else:
-                what_to_vary = 'GWB'
-        #case #2: whe can vary two of them
-        elif n_glitch!=0 and (gwb_on==1 or vary_rn):
-            vary_decide = np.random.uniform()
-            if vary_decide <= 0.5:
-                what_to_vary = 'GLITCH'
-            else:
-                what_to_vary = 'GWB'
-        elif n_wavelet!=0 and (gwb_on==1 or vary_rn):
-            vary_decide = np.random.uniform()
-            if vary_decide <= 0.5:
-                what_to_vary = 'WAVE'
-            else:
-                what_to_vary = 'GWB'
-        elif n_wavelet!=0 and n_glitch!=0:
-            vary_decide = np.random.uniform()
-            if vary_decide <= 0.5:
-                what_to_vary = 'GLITCH'
-            else:
-                what_to_vary = 'WAVE'
-        #case #3: we can only vary one of them
-        elif n_wavelet!=0:
+    if include_gwb:
+        gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+    else:
+        gwb_on = 0
+
+    samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+
+    #decide if moving in wavelet parameters, glitch parameters, or GWB/RN parameters
+    #case #1: we can vary any of them
+    if n_wavelet!=0 and n_glitch!=0 and (gwb_on==1 or vary_rn):
+        vary_decide = np.random.uniform()
+        if vary_decide <= 1.0/3.0:
             what_to_vary = 'WAVE'
-        elif n_glitch!=0:
+        elif vary_decide <= 2.0/3.0:
             what_to_vary = 'GLITCH'
-        elif gwb_on==1 or vary_rn:
+        else:
             what_to_vary = 'GWB'
-        #case #4: nothing to vary
+    #case #2: whe can vary two of them
+    elif n_glitch!=0 and (gwb_on==1 or vary_rn):
+        vary_decide = np.random.uniform()
+        if vary_decide <= 0.5:
+            what_to_vary = 'GLITCH'
         else:
-            samples[j,i+1,:] = samples[j,i,:]
-            a_no[5,j]+=1
-            #print("Nothing to vary!")
-            continue
-
-        if what_to_vary == 'WAVE':
-            wavelet_select = np.random.randint(n_wavelet)
-            jump_select = np.random.randint(10)
-            jump_1wavelet = eig[j,wavelet_select,jump_select,:]
-            jump = np.zeros(samples_current.size)
-            #change intrinsic (and extrinsic) parameters of selected wavelet
-            jump[wavelet_select*10:(wavelet_select+1)*10] = jump_1wavelet
-            #and change sky location and polarization angle of all wavelets
-            for which_wavelet in range(n_wavelet):
-                jump[which_wavelet*10:which_wavelet*10+3] = jump_1wavelet[:3]
-            #print('cw')
-            #print(jump)
-        elif what_to_vary == 'GLITCH':
-            glitch_select = np.random.randint(n_glitch)
-            jump_select = np.random.randint(6)
-            jump_1glitch = eig_glitch[j,glitch_select,jump_select,:]
-            jump = np.zeros(samples_current.size)
-            #print(jump.shape)
-            #print(jump[n_wavelet*8+glitch_select*6:n_wavelet*8+(glitch_select+1)*6].shape)
-            #print(jump_1glitch.shape)
-            jump[n_wavelet*10+glitch_select*6:n_wavelet*10+(glitch_select+1)*6] = jump_1glitch
-        elif what_to_vary == 'GWB':
-            if include_gwb:
-                jump_select = np.random.randint(3)
-            else:
-                jump_select = np.random.randint(2)
-            jump_gwb = eig_gwb_rn[j,jump_select,:]
-            if gwb_on==0 and include_gwb:
-                jump_gwb[-1] = 0
-            if include_gwb:
-                jump = np.array([jump_gwb[int(i-n_wavelet*10-n_glitch*6-num_per_psr_params)] if i>=n_wavelet*10+n_glitch*6+num_per_psr_params and i<n_wavelet*10+n_glitch*6+num_noise_params+1 else 0.0 for i in range(samples_current.size)])
-            else:
-                jump = np.array([jump_gwb[int(i-n_wavelet*10-n_glitch*6-num_per_psr_params)] if i>=n_wavelet*10+n_glitch*6+num_per_psr_params and i<n_wavelet*10+n_glitch*6+num_noise_params else 0.0 for i in range(samples_current.size)])
-            #if j==0: print('gwb+rn')
-            #if j==0: print(i)
-            #if j==0: print(jump)
-
-        new_point = samples_current + jump*np.random.normal()
-
-        #if j==0:
-        #    print(samples_current)
-        #    print(new_point)
-
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
-        log_L = log_acc_ratio
-        log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
-        log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
-
-        acc_ratio = np.exp(log_acc_ratio)
-        #if j==0: print(acc_ratio)
-        if np.random.uniform()<=acc_ratio:
-            #if j==0: print("ohh jeez")
-            samples[j,i+1,0] = n_wavelet
-            samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
-            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
-            a_yes[5,j]+=1
-            log_likelihood[j,i+1] = log_L
+            what_to_vary = 'GWB'
+    elif n_wavelet!=0 and (gwb_on==1 or vary_rn):
+        vary_decide = np.random.uniform()
+        if vary_decide <= 0.5:
+            what_to_vary = 'WAVE'
         else:
-            samples[j,i+1,:] = samples[j,i,:]
-            a_no[5,j]+=1
-            log_likelihood[j,i+1] = log_likelihood[j,i]
+            what_to_vary = 'GWB'
+    elif n_wavelet!=0 and n_glitch!=0:
+        vary_decide = np.random.uniform()
+        if vary_decide <= 0.5:
+            what_to_vary = 'GLITCH'
+        else:
+            what_to_vary = 'WAVE'
+    #case #3: we can only vary one of them
+    elif n_wavelet!=0:
+        what_to_vary = 'WAVE'
+    elif n_glitch!=0:
+        what_to_vary = 'GLITCH'
+    elif gwb_on==1 or vary_rn:
+        what_to_vary = 'GWB'
+    #case #4: nothing to vary
+    else:
+        samples_new = np.copy(samples[j,i,:])
+        yes_or_no = 0
+        log_L = log_likelihood[j,i]
+        #print("Nothing to vary!")
+        return samples_new, log_L, yes_or_no
+
+    if what_to_vary == 'WAVE':
+        wavelet_select = np.random.randint(n_wavelet)
+        jump_select = np.random.randint(10)
+        jump_1wavelet = eig[j,wavelet_select,jump_select,:]
+        jump = np.zeros(samples_current.size)
+        #change intrinsic (and extrinsic) parameters of selected wavelet
+        jump[wavelet_select*10:(wavelet_select+1)*10] = jump_1wavelet
+        #and change sky location and polarization angle of all wavelets
+        for which_wavelet in range(n_wavelet):
+            jump[which_wavelet*10:which_wavelet*10+3] = jump_1wavelet[:3]
+        #print('cw')
+        #print(jump)
+    elif what_to_vary == 'GLITCH':
+        glitch_select = np.random.randint(n_glitch)
+        jump_select = np.random.randint(6)
+        jump_1glitch = eig_glitch[j,glitch_select,jump_select,:]
+        jump = np.zeros(samples_current.size)
+        #print(jump.shape)
+        #print(jump[n_wavelet*8+glitch_select*6:n_wavelet*8+(glitch_select+1)*6].shape)
+        #print(jump_1glitch.shape)
+        jump[n_wavelet*10+glitch_select*6:n_wavelet*10+(glitch_select+1)*6] = jump_1glitch
+    elif what_to_vary == 'GWB':
+        if include_gwb:
+            jump_select = np.random.randint(3)
+        else:
+            jump_select = np.random.randint(2)
+        jump_gwb = eig_gwb_rn[j,jump_select,:]
+        if gwb_on==0 and include_gwb:
+            jump_gwb[-1] = 0
+        if include_gwb:
+            jump = np.array([jump_gwb[int(i-n_wavelet*10-n_glitch*6-num_per_psr_params)] if i>=n_wavelet*10+n_glitch*6+num_per_psr_params and i<n_wavelet*10+n_glitch*6+num_noise_params+1 else 0.0 for i in range(samples_current.size)])
+        else:
+            jump = np.array([jump_gwb[int(i-n_wavelet*10-n_glitch*6-num_per_psr_params)] if i>=n_wavelet*10+n_glitch*6+num_per_psr_params and i<n_wavelet*10+n_glitch*6+num_noise_params else 0.0 for i in range(samples_current.size)])
+        #if j==0: print('gwb+rn')
+        #if j==0: print(i)
+        #if j==0: print(jump)
+
+    new_point = samples_current + jump*np.random.normal()
+
+    #if j==0:
+    #    print(samples_current)
+    #    print(new_point)
+
+    log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+    log_L = log_acc_ratio
+    log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
+    log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+    log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
+
+    acc_ratio = np.exp(log_acc_ratio)
+    #if j==0: print(acc_ratio)
+    samples_new = np.zeros(samples.shape[2])
+    if np.random.uniform()<=acc_ratio:
+        #if j==0: print("ohh jeez")
+        samples_new[0] = n_wavelet
+        samples_new[1] = n_glitch
+        samples_new[2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+        samples_new[2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+        samples_new[2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
+        #a_yes[5,j]+=1
+        #log_likelihood[j,i+1] = log_L
+        yes_or_no = 1
+    else:
+        samples_new = np.copy(samples[j,i,:])
+        #a_no[5,j]+=1
+        log_L = log_likelihood[j,i]
+        yes_or_no = 0
+
+    return samples_new, log_L, yes_or_no
 
 
 ################################################################################
@@ -1427,53 +1474,76 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
 #NOISE MCMC JUMP ROUTINE (JUMPING ALONG EIGENDIRECTIONS IN WHITE NOISE PARAMETERS)
 #
 ################################################################################
-def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood):
-    #print("NOISE")
+def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood, parallel):
+    print("NOISE")
+    
+    if parallel:
+        num_cores = multiprocessing.cpu_count()
+        rrr = Parallel(n_jobs=num_cores)(delayed(noise_move_core)(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood) for j in range(n_chain))
+        samples_new, log_L, yes_or_no = zip(*rrr)
+        #print(samples_new)
+    else:
+        rrr = [noise_move_core(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood) for j in range(n_chain)]
+        samples_new, log_L, yes_or_no = zip(*rrr)
+
     for j in range(n_chain):
-        n_wavelet = get_n_wavelet(samples, j, i)
-        n_glitch = get_n_glitch(samples, j, i)
-        #if j==0:
-        #    print(n_wavelet)
-        #    print(n_glitch)
-
-        if include_gwb:
-            gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+        samples[j,i+1,:] = samples_new[j]
+        log_likelihood[j,i+1] = log_L[j]
+        if yes_or_no[j]==1:
+            a_yes[6,j] += 1
         else:
-            gwb_on = 0
+            a_no[6,j] += 1
 
-        samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+def noise_move_core(j, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, eig_per_psr, include_gwb, num_noise_params, vary_white_noise, log_likelihood):
+    n_wavelet = get_n_wavelet(samples, j, i)
+    n_glitch = get_n_glitch(samples, j, i)
+    #if j==0:
+    #    print(n_wavelet)
+    #    print(n_glitch)
 
-        #do the wn jump
-        jump_select = np.random.randint(eig_per_psr.shape[1])
-        #print(jump_select)
-        jump_wn = eig_per_psr[j,jump_select,:]
-        jump = np.array([jump_wn[int(i-n_wavelet*10-n_glitch*6)] if i>=n_wavelet*10+n_glitch*6 and i<n_wavelet*10+n_glitch*6+eig_per_psr.shape[1] else 0.0 for i in range(samples_current.size)])
-        #if j==0: print('noise')
-        #if j==0: print(jump)
+    if include_gwb:
+        gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+    else:
+        gwb_on = 0
 
-        new_point = samples_current + jump*np.random.normal()
+    samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
 
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
-        log_L = log_acc_ratio
-        log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
-        log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
+    #do the wn jump
+    jump_select = np.random.randint(eig_per_psr.shape[1])
+    #print(jump_select)
+    jump_wn = eig_per_psr[j,jump_select,:]
+    jump = np.array([jump_wn[int(i-n_wavelet*10-n_glitch*6)] if i>=n_wavelet*10+n_glitch*6 and i<n_wavelet*10+n_glitch*6+eig_per_psr.shape[1] else 0.0 for i in range(samples_current.size)])
+    #if j==0: print('noise')
+    #if j==0: print(jump)
 
-        acc_ratio = np.exp(log_acc_ratio)
-        #if j==0: print(acc_ratio)
-        if np.random.uniform()<=acc_ratio:
-            #if j==0: print("Ohhhh")
-            samples[j,i+1,0] = n_wavelet
-            samples[j,i+1,1] = n_glitch
-            samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
-            samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
-            samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
-            a_yes[6,j]+=1
-            log_likelihood[j,i+1] = log_L
-        else:
-            samples[j,i+1,:] = samples[j,i,:]
-            a_no[6,j]+=1
-            log_likelihood[j,i+1] = log_likelihood[j,i]
+    new_point = samples_current + jump*np.random.normal()
+
+    log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)/Ts[j]
+    log_L = log_acc_ratio
+    log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
+    log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)/Ts[j]
+    log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
+
+    acc_ratio = np.exp(log_acc_ratio)
+    #if j==0: print(acc_ratio)
+    samples_new = np.zeros(samples.shape[2])
+    if np.random.uniform()<=acc_ratio:
+        #if j==0: print("Ohhhh")
+        samples_new[0] = n_wavelet
+        samples_new[1] = n_glitch
+        samples_new[2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+        samples_new[2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+        samples_new[2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
+        #a_yes[6,j]+=1
+        #log_likelihood[j,i+1] = log_L
+        yes_or_no = 1
+    else:
+        samples_new = np.copy(samples[j,i,:])
+        #a_no[6,j]+=1
+        log_L = log_likelihood[j,i]
+        yes_or_no = 0
+
+    return samples_new, log_L, yes_or_no
 
 
 ################################################################################
