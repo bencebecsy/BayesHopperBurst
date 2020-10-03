@@ -232,21 +232,21 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
         for j in range(n_chain):
             n_wavelet = get_n_wavelet(samples, j, 0)
             n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars)*num_wn_params, offset=n_wavelet*10+n_glitch*6)
+            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars)*num_wn_params, offset=n_wavelet*10+n_glitch*6, parallel=parallel)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
     elif vary_per_psr_rn and not vary_white_noise:
         eig_per_psr = np.broadcast_to(np.eye(2*len(pulsars))*0.1, (n_chain, 2*len(pulsars), 2*len(pulsars)) ).copy()
         for j in range(n_chain):
             n_wavelet = get_n_wavelet(samples, j, 0)
             n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=2*len(pulsars), offset=n_wavelet*10+n_glitch*6)
+            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=2*len(pulsars), offset=n_wavelet*10+n_glitch*6, parallel=parallel)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
     elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
         eig_per_psr = np.broadcast_to(np.eye((2+num_wn_params)*len(pulsars))*0.1, (n_chain, (2+num_wn_params)*len(pulsars), (2+num_wn_params)*len(pulsars)) ).copy()
         for j in range(n_chain):
             n_wavelet = get_n_wavelet(samples, j, 0)
             n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=(2+num_wn_params)*len(pulsars), offset=n_wavelet*10+n_glitch*6)
+            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=(2+num_wn_params)*len(pulsars), offset=n_wavelet*10+n_glitch*6, parallel=parallel)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
 
     #read in tau_scan data if we will need it
@@ -432,7 +432,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
 
                     #wavelet eigenvectors
                     if n_wavelet!=0:
-                        eigenvectors = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=n_wavelet)
+                        eigenvectors = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=n_wavelet, parallel=parallel)
                         #print("Eigen wavelet")
                         if np.all(eigenvectors):
                             #print("+")
@@ -442,7 +442,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                         #    print("-")
                     #glitch eigenvectors
                     if n_glitch!=0:
-                        eigen_glitch = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=n_glitch, dim=6, offset=n_wavelet*10)
+                        eigen_glitch = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=n_glitch, dim=6, offset=n_wavelet*10, parallel=parallel)
                         #print("Eigen glitch")
                         if np.all(eigen_glitch):
                             #print("+")
@@ -453,9 +453,9 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                         #    print(eigen_glitch)
                     #RN+GWB eigenvectors
                     if include_gwb:
-                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*10+n_glitch*6+num_per_psr_params)
+                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*10+n_glitch*6+num_per_psr_params, parallel=parallel)
                     else:
-                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*10+n_glitch*6+num_per_psr_params)
+                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*10+n_glitch*6+num_per_psr_params, parallel=parallel)
                     #print("Eigen RN+GWB")
                     if np.all(eigvec_rn):
                         #print("+")
@@ -471,7 +471,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                     gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
                 else:
                     gwb_on = 0
-                eigenvectors = get_fisher_eigenvectors(strip_samples(samples, 0, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[0], n_wavelet=n_wavelet)
+                eigenvectors = get_fisher_eigenvectors(strip_samples(samples, 0, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[0], n_wavelet=n_wavelet, parallel=parallel)
                 #check if eigenvector calculation was succesful
                 #if not, we just keep the initialized eig full of 0.1 values              
                 if np.all(eigenvectors):
@@ -1481,7 +1481,7 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
 #FISHER EIGENVALUE CALCULATION
 #
 ################################################################################
-def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=10, offset=0, use_prior=False):
+def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, dim=10, offset=0, use_prior=False, parallel=False):
     n_source=n_wavelet
     fisher = np.zeros((n_source,dim,dim))
     eig = []
@@ -1525,42 +1525,24 @@ def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, d
             fisher[k,i,i] = -(pp - 2.0*nn + mm)/(4.0*epsilon*epsilon)
 
         #calculate off-diagonal elements
-        for i in range(dim):
+        for i in range(dim-1):
+            if parallel:
+                num_cores = multiprocessing.cpu_count()
+                qqq = Parallel(n_jobs=num_cores)(delayed(fisher_core)(params, pta, epsilon, offset, dim, use_prior, k, i, j) for j in range(i+1,dim))
+                #print(qqq)
+                pp, mp, pm, mm = zip(*qqq)
+            else:
+                qqq = [fisher_core(params, pta, epsilon, offset, dim, use_prior, k, i, j) for j in range(i+1,dim)]
+                pp, mp, pm, mm = zip(*qqq)
+
+            #print('off-diagonal')
+            #print(i)
+            #print(pp,mp,pm,mm)
+            #print(-(pp - mp - pm + mm)/(4.0*epsilon*epsilon))
             for j in range(i+1,dim):
-                #create parameter vectors with ++, --, +-, -+ epsilon in the ith and jth component
-                paramsPP = np.copy(params)
-                paramsMM = np.copy(params)
-                paramsPM = np.copy(params)
-                paramsMP = np.copy(params)
-
-                paramsPP[offset+i+k*dim] += epsilon
-                paramsPP[offset+j+k*dim] += epsilon
-                paramsMM[offset+i+k*dim] -= epsilon
-                paramsMM[offset+j+k*dim] -= epsilon
-                paramsPM[offset+i+k*dim] += epsilon
-                paramsPM[offset+j+k*dim] -= epsilon
-                paramsMP[offset+i+k*dim] -= epsilon
-                paramsMP[offset+j+k*dim] += epsilon
-
-                #lnlikelihood at those positions
-                if use_prior:
-                    pp = pta.get_lnlikelihood(paramsPP) + pta.get_lnprior(paramsPP)
-                    mm = pta.get_lnlikelihood(paramsMM) + pta.get_lnprior(paramsMM)
-                    pm = pta.get_lnlikelihood(paramsPM) + pta.get_lnprior(paramsPM)
-                    mp = pta.get_lnlikelihood(paramsMP) + pta.get_lnprior(paramsMP)
-                else:
-                    pp = pta.get_lnlikelihood(paramsPP)
-                    mm = pta.get_lnlikelihood(paramsMM)
-                    pm = pta.get_lnlikelihood(paramsPM)
-                    mp = pta.get_lnlikelihood(paramsMP)
-
-                #calculate off-diagonal elements of the Hessian from a central finite element scheme
-                #note the minus sign compared to the regular Hessian
-                #print('off-diagonal')
-                #print(pp,mp,pm,mm)
-                #print(-(pp - mp - pm + mm)/(4.0*epsilon*epsilon))
-                fisher[k,i,j] = -(pp - mp - pm + mm)/(4.0*epsilon*epsilon)
-                fisher[k,j,i] = -(pp - mp - pm + mm)/(4.0*epsilon*epsilon)
+                #print(j)
+                fisher[k,i,j] = -(pp[j-(i+1)] - mp[j-(i+1)] - pm[j-(i+1)] + mm[j-(i+1)])/(4.0*epsilon*epsilon)
+                fisher[k,j,i] = -(pp[j-(i+1)] - mp[j-(i+1)] - pm[j-(i+1)] + mm[j-(i+1)])/(4.0*epsilon*epsilon)
         
         #print(fisher)
         #correct for the given temperature of the chain    
@@ -1609,6 +1591,41 @@ def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, d
         #plt.colorbar()
     
     return np.array(eig)
+
+def fisher_core(params, pta, epsilon, offset, dim, use_prior, k, i, j):
+    #create parameter vectors with ++, --, +-, -+ epsilon in the ith and jth component
+    paramsPP = np.copy(params)
+    paramsMM = np.copy(params)
+    paramsPM = np.copy(params)
+    paramsMP = np.copy(params)
+
+    paramsPP[offset+i+k*dim] += epsilon
+    paramsPP[offset+j+k*dim] += epsilon
+    paramsMM[offset+i+k*dim] -= epsilon
+    paramsMM[offset+j+k*dim] -= epsilon
+    paramsPM[offset+i+k*dim] += epsilon
+    paramsPM[offset+j+k*dim] -= epsilon
+    paramsMP[offset+i+k*dim] -= epsilon
+    paramsMP[offset+j+k*dim] += epsilon
+
+    #lnlikelihood at those positions
+    if use_prior:
+        pp = pta.get_lnlikelihood(paramsPP) + pta.get_lnprior(paramsPP)
+        mm = pta.get_lnlikelihood(paramsMM) + pta.get_lnprior(paramsMM)
+        pm = pta.get_lnlikelihood(paramsPM) + pta.get_lnprior(paramsPM)
+        mp = pta.get_lnlikelihood(paramsMP) + pta.get_lnprior(paramsMP)
+    else:
+        pp = pta.get_lnlikelihood(paramsPP)
+        mm = pta.get_lnlikelihood(paramsMM)
+        pm = pta.get_lnlikelihood(paramsPM)
+        mp = pta.get_lnlikelihood(paramsMP)
+
+    #calculate off-diagonal elements of the Hessian from a central finite element scheme
+    #note the minus sign compared to the regular Hessian
+    #print('off-diagonal')
+    #print(pp,mp,pm,mm)
+    #print(-(pp - mp - pm + mm)/(4.0*epsilon*epsilon))
+    return pp, mp, pm, mm
 
 
 ################################################################################
