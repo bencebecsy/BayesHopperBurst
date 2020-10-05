@@ -32,30 +32,33 @@ class TauScan(object):
     :param params: Dictionary of noise parameters.
     """
     
-    def __init__(self, psrs, params=None):
-        
+    def __init__(self, psrs, params=None, pta=None):
+
+        if pta is None:        
         print('Initializing the model...')
 
-        efac = parameter.Constant() 
-        equad = parameter.Constant() 
-        ef = white_signals.MeasurementNoise(efac=efac)
-        eq = white_signals.EquadNoise(log10_equad=equad)
+            efac = parameter.Constant() 
+            equad = parameter.Constant() 
+            ef = white_signals.MeasurementNoise(efac=efac)
+            eq = white_signals.EquadNoise(log10_equad=equad)
 
-        tm = gp_signals.TimingModel(use_svd=True)
+            tm = gp_signals.TimingModel(use_svd=True)
 
-        s = eq + ef + tm
+            s = eq + ef + tm
 
-        model = []
-        for p in psrs:
-            model.append(s(p))
-        self.pta = signal_base.PTA(model)  
+            model = []
+            for p in psrs:
+                model.append(s(p))
+            self.pta = signal_base.PTA(model)  
 
-        # set white noise parameters
-        if params is None:
-            print('No noise dictionary provided!...')
+            # set white noise parameters
+            if params is None:
+                print('No noise dictionary provided!...')
+            else:
+                self.pta.set_default_params(params)
         else:
-            self.pta.set_default_params(params)
-
+            self.pta = pta
+        
         self.psrs = psrs
         self.params = params
                                    
