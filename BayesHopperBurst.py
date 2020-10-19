@@ -452,10 +452,12 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                         #    print("-")
                         #    print(eigen_glitch)
                     #RN+GWB eigenvectors
-                    if include_gwb:
+                    if include_gwb and include_rn:
                         eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=Ts[j], n_wavelet=1, dim=3, offset=n_wavelet*10+n_glitch*6+num_per_psr_params, parallel=parallel)
-                    else:
+                    elif include_rn:
                         eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=Ts[j], n_wavelet=1, dim=2, offset=n_wavelet*10+n_glitch*6+num_per_psr_params, parallel=parallel)
+                    else:
+                        eigvec_rn = False
                     #print("Eigen RN+GWB")
                     if np.all(eigvec_rn):
                         #print("+")
