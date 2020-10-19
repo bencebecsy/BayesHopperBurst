@@ -19,6 +19,8 @@ from enterprise.signals import deterministic_signals
 from enterprise.signals import selections
 from enterprise.signals.selections import Selection
 
+from enterprise_extensions.frequentist import Fe_statistic
+
 import enterprise_wavelets as models
 import pickle
 
@@ -1845,3 +1847,51 @@ def get_n_wavelet(samples, j, i):
 
 def get_n_glitch(samples, j, i):
     return int(samples[j,i,1])
+
+################################################################################
+#
+#MATCH CALCULATION ROUTINES
+#
+################################################################################
+
+def get_similarity_matrix(pta, delays_list, noise_param_dict=None):
+
+    if noise_param_dict is None:
+        print('No noise dictionary provided!...')
+    else:
+        pta.set_default_params(noise_param_dict)
+
+    #print(pta.summary())
+
+    phiinvs = pta.get_phiinv([], logdet=False)
+    TNTs = pta.get_TNT([])
+    Ts = pta.get_basis()
+    Nvecs = pta.get_ndiag([])
+    Nmats = [ Fe_statistic.make_Nmat(phiinv, TNT, Nvec, T) for phiinv, TNT, Nvec, T in zip(phiinvs, TNTs, Nvecs, Ts)]
+
+    n_wf = len(delays_list)
+
+    S = np.zeros((n_wf,n_wf))
+    for idx, (psr, Nmat, TNT, phiinv, T) in enumerate(zip(pta.pulsars, Nmats,
+                                                          TNTs, phiinvs, Ts)):
+        Sigma = TNT + (np.diag(phiinv) if phiinv.ndim == 1 else phiinv)
+
+        for i in range(n_wf):
+            for j in range(n_wf):
+                delay_i = delays_list[i][idx]
+                delay_j = delays_list[j][idx]
+                #print(delay_i)
+                #print(Nmat)
+                #print(Nmat, T, Sigma)
+                S[i,j] += Fe_statistic.innerProduct_rr(delay_i, delay_j, Nmat, T, Sigma)
+    return S
+
+def get_match_matrix(pta, delays_list, noise_param_dict=None):
+    S = get_similarity_matrix(pta, delays_list, noise_param_dict=noise_param_dict)
+
+    M = np.zeros(S.shape)
+    for i in range(S.shape[0]):
+        for j in range(S.shape[0]):
+            M[i,j] = S[i,j]/np.sqrt(S[i,i]*S[j,j])
+    return M
+
