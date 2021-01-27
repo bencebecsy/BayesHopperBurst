@@ -358,8 +358,8 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
         print('-'*20) 
 
     #setting up arrays to record acceptance and swaps
-    a_yes=np.zeros((7, n_chain)) #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, PT, fisher, noise_jump)
-    a_no=np.zeros((7, n_chain))
+    a_yes=np.zeros((8, n_chain)) #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, gwb_RJ, PT, fisher, noise_jump)
+    a_no=np.zeros((8, n_chain))
     acc_fraction = a_yes/(a_no+a_yes)
     if resume_from is None:
         swap_record = []
@@ -407,7 +407,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
                 print('Progress: {0:2.2f}% '.format(i/N*100) + '\r',end='')
             else:
                 print('Progress: {0:2.2f}% '.format(i/N*100) +
-                        'Acceptance fraction #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, PT, fisher, noise_jump):')
+                        'Acceptance fraction #columns: chain number; rows: proposal type (glitch_RJ, glitch_tauscan, wavelet_RJ, wavelet_tauscan, GWB_RJ, PT, fisher, noise_jump):')
                 print(acc_fraction)
         #################################################################################
         #
@@ -509,6 +509,93 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
 
     acc_fraction = a_yes/(a_no+a_yes)
     return samples, acc_fraction, swap_record, rj_record, ptas, log_likelihood
+
+################################################################################
+#
+#GWB SWITCH (ON/OFF) MOVE
+#
+################################################################################
+def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes, a_no, vary_white_noise, include_gwb, num_noise_params, gwb_on_prior, gwb_log_amp_range, log_likelihood):
+    if not include_gwb:
+       raise Exception("include_gwb must be True to use this move")
+    for j in range(n_chain):
+        n_wavelet = get_n_wavelet(samples, j, i)
+        n_glitch = get_n_glitch(samples, j, i)
+        if include_gwb:
+            gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
+        else:
+            gwb_on = 0
+        
+        #turning off ---------------------------------------------------------------------------------------------------------
+        if gwb_on==1:
+            #if j==0: print("Turn off")
+            samples_current =  strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+            new_point = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+            
+            old_log_amp = np.copy(new_point[n_wavelet*10+n_glitch*6+num_noise_params])
+            #make a dummy enterprise parameter which we will use for getting the proposal density at the value of the old amplitude
+            sampling_parameter = parameter.Uniform(gwb_log_amp_range[0], gwb_log_amp_range[1])('dummy')
+
+            #set amplitude to zero
+            new_point[n_wavelet*10+n_glitch*6+num_noise_params] = 0.0
+
+            log_acc_ratio = ptas[n_wavelet][n_glitch][0].get_lnlikelihood(new_point)/Ts[j]
+            log_acc_ratio += ptas[n_wavelet][n_glitch][0].get_lnprior(new_point)
+            log_acc_ratio += -ptas[n_wavelet][n_glitch][1].get_lnlikelihood(samples_current)/Ts[j]
+            log_acc_ratio += -ptas[n_wavelet][n_glitch][1].get_lnprior(samples_current)
+
+            acc_ratio = np.exp(log_acc_ratio)*sampling_parameter.get_pdf(old_log_amp)
+
+            #apply on/off prior
+            acc_ratio *= (1-gwb_on_prior)/gwb_on_prior
+            #if j==0: print(acc_ratio)
+            if np.random.uniform()<=acc_ratio:
+                #if j==0: print('wooooow')
+                samples[j,i+1,0] = n_wavelet
+                samples[j,i+1,1] = n_glitch
+                samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+                samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+                samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
+                a_yes[1,j] += 1
+            else:
+                samples[j,i+1,:] = samples[j,i,:]
+                a_no[1,j] += 1
+        #turning on ----------------------------------------------------------------------------------------------------------
+        else:
+            #if j==0: print("Turn on")
+            samples_current =  strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+            new_point = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
+            
+            #draw new amplitude
+            #make a dummy enterprise parameter which we will use for drawing from a log-uniform A distribution
+            sampling_parameter = parameter.Uniform(gwb_log_amp_range[0], gwb_log_amp_range[1])('dummy')
+            new_log_amp = sampling_parameter.sample()
+
+            #put in new parameter
+            new_point[n_wavelet*10+n_glitch*6+num_noise_params] = new_log_amp
+
+            log_acc_ratio = ptas[n_wavelet][n_glitch][1].get_lnlikelihood(new_point)/Ts[j]
+            log_acc_ratio += ptas[n_wavelet][n_glitch][1].get_lnprior(new_point)
+            log_acc_ratio += -ptas[n_wavelet][n_glitch][0].get_lnlikelihood(samples_current)/Ts[j]
+            log_acc_ratio += -ptas[n_wavelet][n_glitch][0].get_lnprior(samples_current)
+
+            acc_ratio = np.exp(log_acc_ratio)/sampling_parameter.get_pdf(new_log_amp)
+            
+            #apply on/off prior
+            acc_ratio *= gwb_on_prior/(1-gwb_on_prior)
+            #if j==0: print(acc_ratio)
+            if np.random.uniform()<=acc_ratio:
+                #if j==0: print('yeeee')
+                samples[j,i+1,0] = n_wavelet
+                samples[j,i+1,1] = n_glitch
+                samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
+                samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
+                samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
+                a_yes[4,j] += 1
+            else:
+                samples[j,i+1,:] = samples[j,i,:]
+                a_no[4,j] += 1
+
 
 ################################################################################
 #
@@ -1327,11 +1414,11 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_y
             samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
             samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
             samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
-            a_yes[5,j]+=1
+            a_yes[6,j]+=1
             log_likelihood[j,i+1] = log_L
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[5,j]+=1
+            a_no[6,j]+=1
             log_likelihood[j,i+1] = log_likelihood[j,i]
 
 
@@ -1380,13 +1467,13 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
             else:
                 samples[j,i+1,:] = samples[j,i,:]
                 log_likelihood[j,i+1] = log_likelihood[j,i]
-        a_yes[4,swap_chain]+=1
+        a_yes[5,swap_chain]+=1
         swap_record.append(swap_chain)
     else:
         for j in range(n_chain):
             samples[j,i+1,:] = samples[j,i,:]
             log_likelihood[j,i+1] = log_likelihood[j,i]
-        a_no[4,swap_chain]+=1
+        a_no[5,swap_chain]+=1
 
 ################################################################################
 #
@@ -1434,11 +1521,11 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, Ts, a_yes
             samples[j,i+1,2:2+n_wavelet*10] = new_point[:n_wavelet*10]
             samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
             samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
-            a_yes[6,j]+=1
+            a_yes[7,j]+=1
             log_likelihood[j,i+1] = log_L
         else:
             samples[j,i+1,:] = samples[j,i,:]
-            a_no[6,j]+=1
+            a_no[7,j]+=1
             log_likelihood[j,i+1] = log_likelihood[j,i]
 
 
