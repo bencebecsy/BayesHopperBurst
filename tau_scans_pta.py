@@ -35,7 +35,7 @@ class TauScan(object):
     def __init__(self, psrs, params=None, pta=None):
 
         if pta is None:        
-        print('Initializing the model...')
+            print('Initializing the model...')
 
             efac = parameter.Constant() 
             equad = parameter.Constant() 
