@@ -11,8 +11,6 @@ import numpy as np
 import scipy.linalg as sl
 import json
 
-import enterprise_cw_funcs_from_git as models
-
 import enterprise
 from enterprise.pulsar import Pulsar
 import enterprise.signals.parameter as parameter
