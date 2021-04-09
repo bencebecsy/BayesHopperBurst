@@ -37,11 +37,14 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                gwb_log_amp_range=[-18,-11], rn_log_amp_range=[-18,-11], per_psr_rn_log_amp_range=[-18,-11], wavelet_log_amp_range=[-18,-11],
                vary_white_noise=False, efac_start=1.0, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None,
                include_gwb=False, gwb_switch_weight=0,
-               include_rn=False, vary_rn=False, num_wn_params=1, rn_params=[-13.0,1.0], include_per_psr_rn=False, vary_per_psr_rn=False, per_psr_rn_start_file=None,
+               include_rn=False, vary_rn=False, num_wn_params=1, num_total_wn_params=None, rn_params=[-13.0,1.0], include_per_psr_rn=False, vary_per_psr_rn=False, per_psr_rn_start_file=None,
                jupyter_notebook=False, gwb_on_prior=0.5,
                max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
                glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
                save_every_n=10000, savefile=None, resume_from=None):
+
+    if num_total_wn_params is None:
+        num_total_wn_params = num_wn_params*len(pulsars)
 
     if TF_prior_file is None:
         TF_prior = None
@@ -113,8 +116,8 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
     num_per_psr_params = 0
     num_noise_params = 0
     if vary_white_noise:
-        num_per_psr_params += len(pulsars)*num_wn_params
-        num_noise_params += len(pulsars)*num_wn_params
+        num_per_psr_params += num_total_wn_params
+        num_noise_params += num_total_wn_params
     if vary_rn:
         num_noise_params += 2
     if vary_per_psr_rn:
@@ -185,7 +188,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                     samples[j,0,2+10*max_n_wavelet+which_glitch*6:2+10*max_n_wavelet+6+which_glitch*6] = np.hstack(p.sample() for p in ptas[0][n_glitch][0].params[:6])
 
             if vary_white_noise and not vary_per_psr_rn:
-                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+len(pulsars)*num_wn_params] = np.ones(len(pulsars)*num_wn_params)*efac_start
+                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.ones(num_total_wn_params)*efac_start
             elif vary_per_psr_rn and not vary_white_noise:
                 if per_psr_rn_start_file==None:
                     samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)])
@@ -193,7 +196,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                     RN_noise_data = np.load(per_psr_rn_start_file)
                     samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = RN_noise_data['RN_start']
             elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
-                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+(2+num_wn_params)*len(pulsars)] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+(2+num_wn_params)*len(pulsars)])
+                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)+num_total_wn_params] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)+num_total_wn_params])
             if vary_rn:
                 samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+num_per_psr_params:2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = np.array([ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-2].sample(), ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-1].sample()])
             if include_gwb:
@@ -222,12 +225,12 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
 
     #and one for white noise parameters, which we will not update
     if vary_white_noise and not vary_per_psr_rn:
-        eig_per_psr = np.broadcast_to(np.eye(len(pulsars)*num_wn_params)*0.1, (n_chain, len(pulsars)*num_wn_params, len(pulsars)*num_wn_params) ).copy()
+        eig_per_psr = np.broadcast_to(np.eye(num_total_wn_params)*0.1, (n_chain, num_total_wn_params, num_total_wn_params) ).copy()
         #calculate wn eigenvectors
         for j in range(n_chain):
             n_wavelet = get_n_wavelet(samples, j, 0)
             n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=len(pulsars)*num_wn_params, offset=n_wavelet*10+n_glitch*6)
+            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=num_total_wn_params, offset=n_wavelet*10+n_glitch*6)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
     elif vary_per_psr_rn and not vary_white_noise:
         eig_per_psr = np.broadcast_to(np.eye(2*len(pulsars))*0.1, (n_chain, 2*len(pulsars), 2*len(pulsars)) ).copy()
@@ -237,11 +240,11 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
             per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=2*len(pulsars), offset=n_wavelet*10+n_glitch*6)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
     elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
-        eig_per_psr = np.broadcast_to(np.eye((2+num_wn_params)*len(pulsars))*0.1, (n_chain, (2+num_wn_params)*len(pulsars), (2+num_wn_params)*len(pulsars)) ).copy()
+        eig_per_psr = np.broadcast_to(np.eye((2*len(pulsars)+num_total_wn_params)*0.1), (n_chain, 2*len(pulsars)+num_total_wn_params, 2*len(pulsars)+num_total_wn_params) ).copy()
         for j in range(n_chain):
             n_wavelet = get_n_wavelet(samples, j, 0)
             n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=(2+num_wn_params)*len(pulsars), offset=n_wavelet*10+n_glitch*6)
+            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=2*len(pulsars)+num_total_wn_params, offset=n_wavelet*10+n_glitch*6)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
 
     #read in tau_scan data if we will need it
