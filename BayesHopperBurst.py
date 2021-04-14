@@ -35,7 +35,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                tau_scan_proposal_weight=0, tau_scan_file=None, draw_from_prior_weight=0,
                de_weight=0, prior_recovery=False, wavelet_amp_prior='uniform', gwb_amp_prior='uniform', rn_amp_prior='uniform', per_psr_rn_amp_prior='uniform',
                gwb_log_amp_range=[-18,-11], rn_log_amp_range=[-18,-11], per_psr_rn_log_amp_range=[-18,-11], wavelet_log_amp_range=[-18,-11],
-               vary_white_noise=False, efac_start=1.0, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None,
+               vary_white_noise=False, efac_start=None, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None,
                include_gwb=False, gwb_switch_weight=0,
                include_rn=False, vary_rn=False, num_wn_params=1, num_total_wn_params=None, rn_params=[-13.0,1.0], include_per_psr_rn=False, vary_per_psr_rn=False, per_psr_rn_start_file=None,
                jupyter_notebook=False, gwb_on_prior=0.5,
@@ -188,7 +188,10 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                     samples[j,0,2+10*max_n_wavelet+which_glitch*6:2+10*max_n_wavelet+6+which_glitch*6] = np.hstack(p.sample() for p in ptas[0][n_glitch][0].params[:6])
 
             if vary_white_noise and not vary_per_psr_rn:
-                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.ones(num_total_wn_params)*efac_start
+                if efac_start is not None:
+                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.ones(num_total_wn_params)*efac_start
+                else:
+                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+num_total_wn_params])
             elif vary_per_psr_rn and not vary_white_noise:
                 if per_psr_rn_start_file==None:
                     samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)])
