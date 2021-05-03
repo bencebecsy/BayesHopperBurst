@@ -243,7 +243,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
             per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=Ts[j], n_wavelet=1, dim=2*len(pulsars), offset=n_wavelet*10+n_glitch*6)
             eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
     elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
-        eig_per_psr = np.broadcast_to(np.eye((2*len(pulsars)+num_total_wn_params)*0.1), (n_chain, 2*len(pulsars)+num_total_wn_params, 2*len(pulsars)+num_total_wn_params) ).copy()
+        eig_per_psr = np.broadcast_to(np.eye(2*len(pulsars)+num_total_wn_params)*0.1, (n_chain, 2*len(pulsars)+num_total_wn_params, 2*len(pulsars)+num_total_wn_params) ).copy()
         for j in range(n_chain):
             n_wavelet = get_n_wavelet(samples, j, 0)
             n_glitch = get_n_glitch(samples, j, 0)
