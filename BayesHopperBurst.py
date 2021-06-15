@@ -41,7 +41,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                jupyter_notebook=False, gwb_on_prior=0.5,
                max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
                glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
-               save_every_n=10000, savefile=None, resume_from=None):
+               save_every_n=10000, savefile=None, resume_from=None, start_from=None):
 
     if num_total_wn_params is None:
         num_total_wn_params = num_wn_params*len(pulsars)
@@ -152,58 +152,67 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
         #set up log_likelihood array
         log_likelihood = np.zeros((n_chain,N))
 
+        #filling first sample at all temperatures with last sample of previous run's zero temperature chain (thus it works if n_chain is different)
+        if start_from is not None:
+            npzfile = np.load(start_from)
+            samples_start = npzfile['samples']
+            for j in range(n_chain):
+                samples[j,0,:] = np.copy(samples_start[0,-1,:])
         #filling first sample with random draw
-        for j in range(n_chain):
-            #set up n_wavelet
-            if n_wavelet_start is 'random':
-                n_wavelet = np.random.choice( np.arange(min_n_wavelet,max_n_wavelet+1) )
-            else:
-                n_wavelet = n_wavelet_start
-            #set up n_glitch
-            if n_glitch_start is 'random':
-                n_glitch = np.random.choice(max_n_glitch+1)
-            else:
-                n_glitch = n_glitch_start
-
-            samples[j,0,0] = n_wavelet
-            samples[j,0,1] = n_glitch
-            if j==0:
-                print("Starting with n_wavelet=",n_wavelet)
-                print("Starting with n_glitch=",n_glitch)
-
-            if n_wavelet!=0:
-                #making sure all wavelets get the same sky location and ellipticity
-                init_cos_gwtheta = ptas[n_wavelet][0][0].params[0].sample()
-                init_psi = ptas[n_wavelet][0][0].params[1].sample()
-                init_gwphi = ptas[n_wavelet][0][0].params[2].sample()
-                for which_wavelet in range(n_wavelet):
-                    samples[j,0,2+0+which_wavelet*10] = init_cos_gwtheta
-                    samples[j,0,2+1+which_wavelet*10] = init_psi
-                    samples[j,0,2+2+which_wavelet*10] = init_gwphi
-                    #randomly pick other wavelet parameters separately fo each wavelet
-                    samples[j,0,2+3+which_wavelet*10:2+10+which_wavelet*10] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[3:10])
-
-            if n_glitch!=0:
-                for which_glitch in range(n_glitch):
-                    samples[j,0,2+10*max_n_wavelet+which_glitch*6:2+10*max_n_wavelet+6+which_glitch*6] = np.hstack(p.sample() for p in ptas[0][n_glitch][0].params[:6])
-
-            if vary_white_noise and not vary_per_psr_rn:
-                if efac_start is not None:
-                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.ones(num_total_wn_params)*efac_start
+        else:
+            for j in range(n_chain):
+                #set up n_wavelet
+                if n_wavelet_start is 'random':
+                    n_wavelet = np.random.choice( np.arange(min_n_wavelet,max_n_wavelet+1) )
                 else:
-                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+num_total_wn_params])
-            elif vary_per_psr_rn and not vary_white_noise:
-                if per_psr_rn_start_file==None:
-                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)])
+                    n_wavelet = n_wavelet_start
+                #set up n_glitch
+                if n_glitch_start is 'random':
+                    n_glitch = np.random.choice(max_n_glitch+1)
                 else:
-                    RN_noise_data = np.load(per_psr_rn_start_file)
-                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = RN_noise_data['RN_start']
-            elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
-                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)+num_total_wn_params] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)+num_total_wn_params])
-            if vary_rn:
-                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+num_per_psr_params:2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = np.array([ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-2].sample(), ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-1].sample()])
-            if include_gwb:
-                samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = ptas[n_wavelet][0][1].params[n_wavelet*10+num_noise_params].sample()
+                    n_glitch = n_glitch_start
+
+                samples[j,0,0] = n_wavelet
+                samples[j,0,1] = n_glitch
+                if j==0:
+                    print("Starting with n_wavelet=",n_wavelet)
+                    print("Starting with n_glitch=",n_glitch)
+
+                if n_wavelet!=0:
+                    #making sure all wavelets get the same sky location and ellipticity
+                    init_cos_gwtheta = ptas[n_wavelet][0][0].params[0].sample()
+                    init_psi = ptas[n_wavelet][0][0].params[1].sample()
+                    init_gwphi = ptas[n_wavelet][0][0].params[2].sample()
+                    for which_wavelet in range(n_wavelet):
+                        samples[j,0,2+0+which_wavelet*10] = init_cos_gwtheta
+                        samples[j,0,2+1+which_wavelet*10] = init_psi
+                        samples[j,0,2+2+which_wavelet*10] = init_gwphi
+                        #randomly pick other wavelet parameters separately fo each wavelet
+                        samples[j,0,2+3+which_wavelet*10:2+10+which_wavelet*10] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[3:10])
+
+                if n_glitch!=0:
+                    for which_glitch in range(n_glitch):
+                        samples[j,0,2+10*max_n_wavelet+which_glitch*6:2+10*max_n_wavelet+6+which_glitch*6] = np.hstack(p.sample() for p in ptas[0][n_glitch][0].params[:6])
+
+                if vary_white_noise and not vary_per_psr_rn:
+                    if efac_start is not None:
+                        samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.ones(num_total_wn_params)*efac_start
+                    else:
+                        samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+num_total_wn_params] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+num_total_wn_params])
+                elif vary_per_psr_rn and not vary_white_noise:
+                    if per_psr_rn_start_file==None:
+                        samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)])
+                    else:
+                        RN_noise_data = np.load(per_psr_rn_start_file)
+                        samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)] = RN_noise_data['RN_start']
+                elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
+                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6:2+max_n_wavelet*10+max_n_glitch*6+2*len(pulsars)+num_total_wn_params] = np.hstack(p.sample() for p in ptas[n_wavelet][0][0].params[n_wavelet*10:n_wavelet*10+2*len(pulsars)+num_total_wn_params])
+                if vary_rn:
+                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+num_per_psr_params:2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = np.array([ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-2].sample(), ptas[n_wavelet][0][0].params[n_wavelet*10+num_noise_params-1].sample()])
+                if include_gwb:
+                    samples[j,0,2+max_n_wavelet*10+max_n_glitch*6+num_noise_params] = ptas[n_wavelet][0][1].params[n_wavelet*10+num_noise_params].sample()
+        
+        #printing info about initial parameters
         print(samples[0,0,:])
         n_wavelet = get_n_wavelet(samples, 0, 0)
         n_glitch = get_n_glitch(samples, 0, 0)
