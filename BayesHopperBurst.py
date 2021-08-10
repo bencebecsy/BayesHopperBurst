@@ -558,7 +558,8 @@ def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, beta
             #set amplitude to zero
             new_point[n_wavelet*10+n_glitch*6+num_noise_params] = 0.0
 
-            log_acc_ratio = ptas[n_wavelet][n_glitch][0].get_lnlikelihood(new_point)*betas[j]
+            log_L = ptas[n_wavelet][n_glitch][0].get_lnlikelihood(new_point)
+            log_acc_ratio = log_L*betas[j]
             log_acc_ratio += ptas[n_wavelet][n_glitch][0].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][n_glitch][1].get_lnlikelihood(samples_current)*betas[j]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][1].get_lnprior(samples_current)
@@ -576,9 +577,11 @@ def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, beta
                 samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
                 samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
                 a_yes[1,j] += 1
+                log_likelihood[j,i+1] = log_L
             else:
                 samples[j,i+1,:] = samples[j,i,:]
                 a_no[1,j] += 1
+                log_likelihood[j,i+1] = log_likelihood[j,i]
         #turning on ----------------------------------------------------------------------------------------------------------
         else:
             #if j==0: print("Turn on")
@@ -593,7 +596,8 @@ def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, beta
             #put in new parameter
             new_point[n_wavelet*10+n_glitch*6+num_noise_params] = new_log_amp
 
-            log_acc_ratio = ptas[n_wavelet][n_glitch][1].get_lnlikelihood(new_point)*betas[j]
+            log_L = ptas[n_wavelet][n_glitch][1].get_lnlikelihood(new_point)
+            log_acc_ratio = log_L*betas[j]
             log_acc_ratio += ptas[n_wavelet][n_glitch][1].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][n_glitch][0].get_lnlikelihood(samples_current)*betas[j]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][0].get_lnprior(samples_current)
@@ -611,9 +615,11 @@ def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, beta
                 samples[j,i+1,2+max_n_wavelet*10:2+max_n_wavelet*10+n_glitch*6] = new_point[n_wavelet*10:n_wavelet*10+n_glitch*6]
                 samples[j,i+1,2+max_n_wavelet*10+max_n_glitch*6:] = new_point[n_wavelet*10+n_glitch*6:]
                 a_yes[4,j] += 1
+                log_likelihood[j,i+1] = log_L
             else:
                 samples[j,i+1,:] = samples[j,i,:]
                 a_no[4,j] += 1
+                log_likelihood[j,i+1] = log_likelihood[j,i]
 
 
 ################################################################################
@@ -690,8 +696,8 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             new_glitch = np.array([log_f0_new, log10_h_new, phase0_new, float(psr_idx), t0_new, tau_new])
             new_point[n_wavelet*10+n_glitch*6:n_wavelet*10+(n_glitch+1)*6] = new_glitch
 
-            log_acc_ratio = ptas[n_wavelet][(n_glitch+1)][gwb_on].get_lnlikelihood(new_point)*betas[j]
-            log_L = log_acc_ratio
+            log_L = ptas[n_wavelet][(n_glitch+1)][gwb_on].get_lnlikelihood(new_point)
+            log_acc_ratio = log_L*betas[j]
             log_acc_ratio += ptas[n_wavelet][(n_glitch+1)][gwb_on].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -729,8 +735,8 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             samples_current = strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch)
             new_point = np.delete(samples_current, range(n_wavelet*10+remove_index*6,n_wavelet*10+(remove_index+1)*6))
 
-            log_acc_ratio = ptas[n_wavelet][(n_glitch-1)][gwb_on].get_lnlikelihood(new_point)*betas[j]
-            log_L = log_acc_ratio
+            log_L = ptas[n_wavelet][(n_glitch-1)][gwb_on].get_lnlikelihood(new_point)
+            log_acc_ratio = log_L*betas[j]
             log_acc_ratio += ptas[n_wavelet][(n_glitch-1)][gwb_on].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -815,6 +821,7 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         if n_glitch==0:
             samples[j,i+1,:] = samples[j,i,:]
             a_no[1,j]+=1
+            log_likelihood[j,i+1] = log_likelihood[j,i]
             #print("No glitch to vary!")
             continue
 
@@ -883,8 +890,8 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         #    print(samples_current)
         #    print(new_point)
 
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)*betas[j]
-        log_L = log_acc_ratio
+        log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
+        log_acc_ratio = log_L*betas[j]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -1042,8 +1049,8 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
             #    print(samples_current)
             #    print(new_point)
 
-            log_acc_ratio = ptas[(n_wavelet+1)][n_glitch][gwb_on].get_lnlikelihood(new_point)*betas[j]
-            log_L = log_acc_ratio
+            log_L = ptas[(n_wavelet+1)][n_glitch][gwb_on].get_lnlikelihood(new_point)
+            log_acc_ratio = log_L*betas[j]
             log_acc_ratio += ptas[(n_wavelet+1)][n_glitch][gwb_on].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -1097,8 +1104,8 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
             #    print(samples_current)
             #    print(new_point)
 
-            log_acc_ratio = ptas[(n_wavelet-1)][n_glitch][gwb_on].get_lnlikelihood(new_point)*betas[j]
-            log_L = log_acc_ratio
+            log_L = ptas[(n_wavelet-1)][n_glitch][gwb_on].get_lnlikelihood(new_point)
+            log_acc_ratio = log_L*betas[j]
             log_acc_ratio += ptas[(n_wavelet-1)][n_glitch][gwb_on].get_lnprior(new_point)
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -1223,6 +1230,7 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
         if n_wavelet==0:
             samples[j,i+1,:] = samples[j,i,:]
             a_no[3,j]+=1
+            log_likelihood[j,i+1] = log_likelihood[j,i]
             #print("No source to vary!")
             continue
 
@@ -1274,8 +1282,8 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
         new_point[wavelet_select*10:(wavelet_select+1)*10] = np.array([cos_gwtheta_old, psi_old, gwphi_old, log_f0_new,
                                                                      log10_h_new, log10_h_cross_new, phase0_new, phase0_cross_new, t0_new, tau_new])
 
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)*betas[j]
-        log_L = log_acc_ratio
+        log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
+        log_acc_ratio = log_L*betas[j]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -1372,6 +1380,7 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, 
         else:
             samples[j,i+1,:] = samples[j,i,:]
             a_no[5,j]+=1
+            log_likelihood[j,i+1] = log_likelihood[j,i]
             #print("Nothing to vary!")
             continue
 
@@ -1418,8 +1427,8 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, 
         #    print(samples_current)
         #    print(new_point)
 
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)*betas[j]
-        log_L = log_acc_ratio
+        log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
+        log_acc_ratio = log_L*betas[j]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
@@ -1466,10 +1475,12 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, a_
     samples_current1 = strip_samples(samples, swap_chain, i, n_wavelet1, max_n_wavelet, n_glitch1, max_n_glitch)
     samples_current2 = strip_samples(samples, swap_chain+1, i, n_wavelet2, max_n_wavelet, n_glitch2, max_n_glitch)
 
-    log_acc_ratio = -ptas[n_wavelet1][n_glitch1][gwb_on1].get_lnlikelihood(samples_current1) * betas[swap_chain]
-    log_acc_ratio += -ptas[n_wavelet2][n_glitch2][gwb_on2].get_lnlikelihood(samples_current2) * betas[swap_chain+1]
-    log_acc_ratio += ptas[n_wavelet2][n_glitch2][gwb_on2].get_lnlikelihood(samples_current2) * betas[swap_chain]
-    log_acc_ratio += ptas[n_wavelet1][n_glitch1][gwb_on1].get_lnlikelihood(samples_current1) * betas[swap_chain+1]
+    log_L1 = ptas[n_wavelet1][n_glitch1][gwb_on1].get_lnlikelihood(samples_current1)
+    log_L2 = ptas[n_wavelet2][n_glitch2][gwb_on2].get_lnlikelihood(samples_current2)
+    log_acc_ratio = -log_L1 * betas[swap_chain]
+    log_acc_ratio += -log_L2 * betas[swap_chain+1]
+    log_acc_ratio += log_L2 * betas[swap_chain]
+    log_acc_ratio += log_L1 * betas[swap_chain+1]
 
     #print(samples_current1)
     #print(samples_current2)
@@ -1479,10 +1490,10 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, a_
         for j in range(n_chain):
             if j==swap_chain:
                 samples[j,i+1,:] = samples[j+1,i,:]
-                log_likelihood[j,i+1] = ptas[n_wavelet2][n_glitch2][gwb_on2].get_lnlikelihood(samples_current2) * betas[swap_chain]
+                log_likelihood[j,i+1] = log_L2
             elif j==swap_chain+1:
                 samples[j,i+1,:] = samples[j-1,i,:]
-                log_likelihood[j,i+1] = ptas[n_wavelet1][n_glitch1][gwb_on1].get_lnlikelihood(samples_current1) * betas[swap_chain+1]
+                log_likelihood[j,i+1] = log_L1
             else:
                 samples[j,i+1,:] = samples[j,i,:]
                 log_likelihood[j,i+1] = log_likelihood[j,i]
@@ -1525,8 +1536,8 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, a_
 
         new_point = samples_current + jump*np.random.normal()
 
-        log_acc_ratio = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)*betas[j]
-        log_L = log_acc_ratio
+        log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
+        log_acc_ratio = log_L*betas[j]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
