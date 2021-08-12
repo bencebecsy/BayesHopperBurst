@@ -41,7 +41,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                jupyter_notebook=False, gwb_on_prior=0.5,
                max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
                glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
-               save_every_n=10000, savefile=None, resume_from=None, start_from=None):
+               save_every_n=10000, savefile=None, resume_from=None, start_from=None, n_status_update=100):
 
     if num_total_wn_params is None:
         num_total_wn_params = num_wn_params*len(pulsars)
@@ -66,8 +66,6 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
 
     #fisher updating every n_fish_update step
     n_fish_update = 200 #50
-    #print out status every n_status_update step
-    n_status_update = 10
 
     #setting up temperature ladder
     if T_ladder is None:
