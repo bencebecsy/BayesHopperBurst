@@ -94,8 +94,8 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
     else:
         print("Dynamic temperature adjustment: OFF")
 
-    #set up array to hold acceptance statistics of last PT_hist_length PT swaps
-    PT_hist = np.ones((n_chain-1,PT_hist_length))*np.nan #1s mean accepted, 0s mean not accepted, initiated with NaNs
+    #set up array to hold acceptance probabilities of last PT_hist_length PT swaps
+    PT_hist = np.ones((n_chain-1,PT_hist_length))*np.nan #initiated with NaNs
     PT_hist_idx = np.array([0]) #index to keep track of which row to update in PT_hist
 
     #printitng out the prior used on GWB on/off
@@ -445,7 +445,7 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
         #acc_fraction = a_yes/(a_no+a_yes)
         #PT_acc[:,i] = np.copy(acc_fraction[5,:])
 
-        #logging instantaneous acc fraction
+        #logging mean acc probability over last PT_hist_length swaps
         PT_acc[:,i] = np.nanmean(PT_hist, axis=1) #nanmean so early on when we still have nans we only use the actual data
         ########################################################
         #
@@ -1554,14 +1554,15 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, a_
         log_acc_ratio += log_Ls[swap_map[swap_chain]] * betas[swap_chain+1,i]
 
         acc_ratio = np.exp(log_acc_ratio)
+        PT_hist[swap_chain,PT_hist_idx[0]%PT_hist.shape[1]] = np.minimum(acc_ratio, 1.0)
         if np.random.uniform()<=acc_ratio:
             swap_map[swap_chain], swap_map[swap_chain+1] = swap_map[swap_chain+1], swap_map[swap_chain]
             a_yes[5,swap_chain]+=1
-            PT_hist[swap_chain,PT_hist_idx[0]%PT_hist.shape[1]] = 1.0
+            #PT_hist[swap_chain,PT_hist_idx[0]%PT_hist.shape[1]] = 1.0
             swap_record.append(swap_chain)
         else:
             a_no[5,swap_chain]+=1
-            PT_hist[swap_chain,PT_hist_idx[0]%PT_hist.shape[1]] = 0.0
+            #PT_hist[swap_chain,PT_hist_idx[0]%PT_hist.shape[1]] = 0.0
     
     #print(PT_hist_idx[0])
     PT_hist_idx += 1
