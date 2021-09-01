@@ -634,11 +634,6 @@ def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, beta
             log_L = ptas[n_wavelet][n_glitch][0].get_lnlikelihood(new_point)
             log_acc_ratio = log_L*betas[j,i]
             log_acc_ratio += ptas[n_wavelet][n_glitch][0].get_lnprior(new_point)
-            #log_acc_ratio += -ptas[n_wavelet][n_glitch][1].get_lnlikelihood(samples_current)*betas[j,i]
-            #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][1].get_lnlikelihood(samples_current)*betas[j,i]
-            #if bubba_lubba != 0.0:
-            #    print("Bubba gwb_switch")
-            #    print(j)
             log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][1].get_lnprior(samples_current)
 
@@ -677,11 +672,6 @@ def gwb_switch_move(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, beta
             log_L = ptas[n_wavelet][n_glitch][1].get_lnlikelihood(new_point)
             log_acc_ratio = log_L*betas[j,i]
             log_acc_ratio += ptas[n_wavelet][n_glitch][1].get_lnprior(new_point)
-            #log_acc_ratio += -ptas[n_wavelet][n_glitch][0].get_lnlikelihood(samples_current)*betas[j,i]
-            #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][0].get_lnlikelihood(samples_current)*betas[j,i]
-            #if bubba_lubba != 0.0:
-            #    print("Bubba gwb_switch")
-            #    print(j)
             log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][0].get_lnprior(samples_current)
 
@@ -782,11 +772,6 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             log_L = ptas[n_wavelet][(n_glitch+1)][gwb_on].get_lnlikelihood(new_point)
             log_acc_ratio = log_L*betas[j,i]
             log_acc_ratio += ptas[n_wavelet][(n_glitch+1)][gwb_on].get_lnprior(new_point)
-            #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #if bubba_lubba != 0.0:
-            #    print("Bubba glitch_rj")
-            #    print(j)
             log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
@@ -826,11 +811,6 @@ def do_glitch_rj_move(n_chain, max_n_wavelet, max_n_glitch, n_glitch_prior, ptas
             log_L = ptas[n_wavelet][(n_glitch-1)][gwb_on].get_lnlikelihood(new_point)
             log_acc_ratio = log_L*betas[j,i]
             log_acc_ratio += ptas[n_wavelet][(n_glitch-1)][gwb_on].get_lnprior(new_point)
-            #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #if bubba_lubba != 0.0:
-            #    print("Bubba glitch_rj")
-            #    print(j)
             log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
@@ -907,10 +887,6 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         #check if there's any wavelet -- stay at given point if not
         n_wavelet = get_n_wavelet(samples, j, i)
         n_glitch = get_n_glitch(samples, j, i)
-        #if j==0:
-        #    print(n_wavelet)
-        #    print(n_glitch)
-        #    print(samples[j,i,:])
         if n_glitch==0:
             samples[j,i+1,:] = samples[j,i,:]
             a_no[1,j]+=1
@@ -979,18 +955,9 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         new_point[n_wavelet*10+glitch_select*6:n_wavelet*10+(glitch_select+1)*6] = np.array([log_f0_new, log10_h_new, phase0_new,
                                                                                            float(psr_idx), t0_new, tau_new])
 
-        #if j==0:
-        #    print(samples_current)
-        #    print(new_point)
-
         log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
         log_acc_ratio = log_L*betas[j,i]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #if bubba_lubba != 0.0:
-        #    print("Bubba glitch_tau_scan")
-        #    print(j)
         log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
@@ -1022,12 +989,6 @@ def do_glitch_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, s
         hastings_extra_factor = ptas[0][-1][gwb_on].params[1].get_pdf(log10_h_old) / ptas[0][-1][gwb_on].params[1].get_pdf(log10_h_new)
     
         acc_ratio = np.exp(log_acc_ratio)*(tau_scan_old_point/tau_scan_new_point) * (tau_scan_limit/tau_scan_limit_old) * hastings_extra_factor
-        #if j==0:
-        #    print(acc_ratio)
-        #    print(np.exp(log_acc_ratio))
-        #    print(tau_scan_old_point/tau_scan_new_point)
-        #    print(tau_scan_limit/tau_scan_limit_old)
-        #    print(hastings_extra_factor)
         if np.random.uniform()<=acc_ratio:
             #if j==0: print("Ohh jeez")
             samples[j,i+1,0] = n_wavelet
@@ -1068,10 +1029,6 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
     for j in range(n_chain):
         n_wavelet = get_n_wavelet(samples, j, i)
         n_glitch = get_n_glitch(samples, j, i)
-        #if j==0:
-            #print(n_wavelet)
-            #print(n_glitch)
-            #print(samples[j,i,:])
         
         if include_gwb:
             gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
@@ -1139,22 +1096,9 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
                                     phase0_new, phase0_cross_new, t0_new, tau_new])
             new_point[n_wavelet*10:(n_wavelet+1)*10] = new_wavelet
 
-            #if j==0:
-            #    print(samples_current)
-            #    print(new_point)
-
-            #if j==0:
-            #    print(samples_current)
-            #    print(new_point)
-
             log_L = ptas[(n_wavelet+1)][n_glitch][gwb_on].get_lnlikelihood(new_point)
             log_acc_ratio = log_L*betas[j,i]
             log_acc_ratio += ptas[(n_wavelet+1)][n_glitch][gwb_on].get_lnprior(new_point)
-            #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #if bubba_lubba != 0.0:
-            #    print("Bubba wavelet_rj")
-            #    print(j)
             log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
            
@@ -1170,16 +1114,6 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
                 acc_ratio *= 2.0
             #accounting for n_wavelet prior
             acc_ratio *= n_wavelet_prior[int(n_wavelet)+1]/n_wavelet_prior[int(n_wavelet)]
-            #if j==0:
-            #    print("Add wavelet")
-            #    print(acc_ratio)
-            #    print(np.exp(log_acc_ratio)/prior_ext/ptas[-1][gwb_on].params[3].get_pdf(log_f0_new)/ptas[-1][gwb_on].params[6].get_pdf(t0_new)/ptas[-1][gwb_on].params[7].get_pdf(tau_new))
-            #    print(log_acc_ratio)
-            #    print(ptas[(n_wavelet+1)][gwb_on].get_lnlikelihood(new_point)*betas[j,i]-ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)*betas[j,i])
-            #    print(ptas[(n_wavelet+1)][gwb_on].get_lnprior(new_point)-ptas[n_wavelet][gwb_on].get_lnprior(samples_current))
-            #    print(1/prior_ext)
-            #    print(1/tau_scan_new_point_normalized)
-            #    print(n_wavelet_prior[int(n_wavelet)+1]/n_wavelet_prior[int(n_wavelet)])
             if np.random.uniform()<=acc_ratio:
                 #if j==0: print("Yeeeh")
                 samples[j,i+1,0] = n_wavelet+1
@@ -1210,11 +1144,6 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
             log_L = ptas[(n_wavelet-1)][n_glitch][gwb_on].get_lnlikelihood(new_point)
             log_acc_ratio = log_L*betas[j,i]
             log_acc_ratio += ptas[(n_wavelet-1)][n_glitch][gwb_on].get_lnprior(new_point)
-            #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-            #if bubba_lubba != 0.0:
-            #    print("Bubba wavelet_rj")
-            #    print(j)
             log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
             log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
@@ -1241,21 +1170,6 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
             gwphi_old = np.copy(samples[j,i,2+2+remove_index*10])
             psi_old = np.copy(samples[j,i,2+1+remove_index*10])
 
-            #if j==0:
-            #    print("---")
-            #    print("cos_theta: ", cos_gwtheta_old)
-            #    print("epsilon: ", epsilon_old)
-            #    print("phi: ", gwphi_old)
-            #    print("f0: ", f0_old)
-            #    print("log10h: ", log10_h_old)
-            #    print("phase0: ", phase0_old)
-            #    print("t0: ", t0_old)
-            #    print("tau: ", tau_old)
-            #    print(samples_current)
-            #    print(new_point)
-            #    print("---")
-                
-
             prior_ext = (ptas[-1][0][gwb_on].params[0].get_pdf(cos_gwtheta_old) * ptas[-1][0][gwb_on].params[1].get_pdf(psi_old) *
                          ptas[-1][0][gwb_on].params[2].get_pdf(gwphi_old) *
                          ptas[-1][0][gwb_on].params[4].get_pdf(log10_h_old) * ptas[-1][0][gwb_on].params[5].get_pdf(log10_h_cross_old) *
@@ -1269,16 +1183,6 @@ def do_rj_move(n_chain, max_n_wavelet, min_n_wavelet, max_n_glitch, n_wavelet_pr
                 acc_ratio *= 0.5
             #accounting for n_wavelet prior
             acc_ratio *= n_wavelet_prior[int(n_wavelet)-1]/n_wavelet_prior[int(n_wavelet)]
-            #if j==0:
-            #    print("Remove wavelet")
-            #    print(acc_ratio)
-            #    print(np.exp(log_acc_ratio)*prior_ext*ptas[-1][gwb_on].params[3].get_pdf(np.log10(f0_old))*ptas[-1][gwb_on].params[6].get_pdf(t0_old)*ptas[-1][gwb_on].params[7].get_pdf(tau_old))
-            #    print(log_acc_ratio)
-            #    print(ptas[(n_wavelet-1)][gwb_on].get_lnlikelihood(new_point)*betas[j,i]-ptas[n_wavelet][gwb_on].get_lnlikelihood(samples_current)*betas[j,i])
-            #    print(ptas[(n_wavelet-1)][gwb_on].get_lnprior(new_point)-ptas[n_wavelet][gwb_on].get_lnprior(samples_current))
-            #    print(1/prior_ext)
-            #    print(1/tau_scan_old_point_normalized)
-            #    print(n_wavelet_prior[int(n_wavelet)-1]/n_wavelet_prior[int(n_wavelet)])
             if np.random.uniform()<=acc_ratio:
                 #if j==0: print("Ohhhhhhhhhhhhh")
                 samples[j,i+1,0] = n_wavelet-1
@@ -1393,11 +1297,6 @@ def do_tau_scan_global_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples,
         log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
         log_acc_ratio = log_L*betas[j,i]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #if bubba_lubba != 0.0:
-        #    print("Bubba wavelet_tau_scan")
-        #    print(j)
         log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
@@ -1543,11 +1442,6 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, 
         log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
         log_acc_ratio = log_L*betas[j,i]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #if bubba_lubba != 0.0:
-        #    print("Bubba fisher")
-        #    print(j)
         log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
@@ -1579,31 +1473,13 @@ def do_pt_swap(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, a_
     #set up map to help keep track of swaps
     swap_map = list(range(n_chain))
 
-    #get all the parameters and log_Ls from all the chains
-    #n_wavelets = []
-    #n_glitches = []
-    #gwb_ons = []
+    #get log_Ls from all the chains
     log_Ls = []
     for j in range(n_chain):
-        #n_wavelets.append(get_n_wavelet(samples, j, i))
-        #n_glitches.append(get_n_glitch(samples, j, i))
-        #if include_gwb:
-        #    gwb_ons.append(get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params))
-        #else:
-        #    gwb_ons.append(0)
-        #
-        #samples_current = strip_samples(samples, j, i, n_wavelets[j], max_n_wavelet, n_glitches[j], max_n_glitch)
-        #log_Ls.append(ptas[n_wavelets[j]][n_glitches[j]][gwb_ons[j]].get_lnlikelihood(samples_current))
-        #bubba_lubba = log_likelihood[j,i] -ptas[n_wavelets[j]][n_glitches[j]][gwb_ons[j]].get_lnlikelihood(samples_current)
-        #if bubba_lubba != 0.0:
-        #    print("Bubba pt_swap")
-        #    print(j)
         log_Ls.append(log_likelihood[j,i])
 
     #loop through and propose a swap at each chain (starting from hottest chain and going down in T) and keep track of results in swap_map
     for swap_chain in reversed(range(n_chain-1)):
-        #log_L1 = ptas[n_wavelet1][n_glitch1][gwb_on1].get_lnlikelihood(samples_current1)
-        #log_L2 = ptas[n_wavelet2][n_glitch2][gwb_on2].get_lnlikelihood(samples_current2)
         log_acc_ratio = -log_Ls[swap_map[swap_chain]] * betas[swap_chain,i]
         log_acc_ratio += -log_Ls[swap_map[swap_chain+1]] * betas[swap_chain+1,i]
         log_acc_ratio += log_Ls[swap_map[swap_chain+1]] * betas[swap_chain,i]
@@ -1663,11 +1539,6 @@ def noise_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, a_
         log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
         log_acc_ratio = log_L*betas[j,i]
         log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
-        #log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #bubba_lubba = log_likelihood[j,i]*betas[j,i] -ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(samples_current)*betas[j,i]
-        #if bubba_lubba != 0.0:
-        #    print("Bubba noise")
-        #    print(j)
         log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
