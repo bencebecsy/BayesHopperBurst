@@ -41,7 +41,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                jupyter_notebook=False, gwb_on_prior=0.5,
                max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
                glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
-               save_every_n=10000, savefile=None, resume_from=None, start_from=None, n_status_update=100):
+               save_every_n=10000, savefile=None, resume_from=None, start_from=None, n_status_update=100, n_fish_update=1000):
 
     if num_total_wn_params is None:
         num_total_wn_params = num_wn_params*len(pulsars)
@@ -63,9 +63,6 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                 #point_to_test = np.tile(np.array([0.0, 0.54, 1.0, -8.0, -13.39, 2.0, 0.5]),i+1)
     
     print(ptas[-1][-1][-1].summary())
-
-    #fisher updating every n_fish_update step
-    n_fish_update = 200 #50
 
     #setting up temperature ladder
     if T_ladder is None:
@@ -273,29 +270,14 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
     else:
         eig_gwb_rn = np.broadcast_to( np.array([[1.0,0], [0,0.3]]), (n_chain, 2, 2)).copy()
 
-    #and one for white noise parameters, which we will not update
-    if vary_white_noise and not vary_per_psr_rn:
-        eig_per_psr = np.broadcast_to(np.eye(num_total_wn_params)*0.1, (n_chain, num_total_wn_params, num_total_wn_params) ).copy()
-        #calculate wn eigenvectors
-        for j in range(n_chain):
-            n_wavelet = get_n_wavelet(samples, j, 0)
-            n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=1/betas[j,0], n_wavelet=1, dim=num_total_wn_params, offset=n_wavelet*10+n_glitch*6)
-            eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
-    elif vary_per_psr_rn and not vary_white_noise:
-        eig_per_psr = np.broadcast_to(np.eye(2*len(pulsars))*0.1, (n_chain, 2*len(pulsars), 2*len(pulsars)) ).copy()
-        for j in range(n_chain):
-            n_wavelet = get_n_wavelet(samples, j, 0)
-            n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=1/betas[j,0], n_wavelet=1, dim=2*len(pulsars), offset=n_wavelet*10+n_glitch*6)
-            eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
-    elif vary_per_psr_rn and vary_white_noise: #vary both per psr RN and WN
-        eig_per_psr = np.broadcast_to(np.eye(2*len(pulsars)+num_total_wn_params)*0.1, (n_chain, 2*len(pulsars)+num_total_wn_params, 2*len(pulsars)+num_total_wn_params) ).copy()
-        for j in range(n_chain):
-            n_wavelet = get_n_wavelet(samples, j, 0)
-            n_glitch = get_n_glitch(samples, j, 0)
-            per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=1/betas[j,0], n_wavelet=1, dim=2*len(pulsars)+num_total_wn_params, offset=n_wavelet*10+n_glitch*6)
-            eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
+    #and one for white noise parameters, which we will also keep updating
+    eig_per_psr = np.broadcast_to(np.eye(num_per_psr_params)*0.1, (n_chain, num_per_psr_params, num_per_psr_params) ).copy()
+    #calculate wn eigenvectors
+    for j in range(n_chain):
+        n_wavelet = get_n_wavelet(samples, j, 0)
+        n_glitch = get_n_glitch(samples, j, 0)
+        per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, 0, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][0][0], T_chain=1/betas[j,0], n_wavelet=1, dim=num_per_psr_params, offset=n_wavelet*10+n_glitch*6)
+        eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
 
     #read in tau_scan data if we will need it
     if tau_scan_proposal_weight+RJ_weight>0:
@@ -509,60 +491,43 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
         if i%n_fish_update==0:
             #only update T>1 chains every 10th time
             if i%(n_fish_update*10)==0:
-                for j in range(n_chain):
-                    n_wavelet = get_n_wavelet(samples, j, i)
-                    n_glitch = get_n_glitch(samples, j, i)
-                    if include_gwb:
-                        gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
-                    else:
-                        gwb_on = 0
+                max_j = n_chain
+            else:
+                max_j = 1
 
-                    #wavelet eigenvectors
-                    if n_wavelet!=0:
-                        eigenvectors = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,i], n_wavelet=n_wavelet)
-                        #print("Eigen wavelet")
-                        if np.all(eigenvectors):
-                            #print("+")
-                            #print(eigenvectors)
-                            eig[j,:n_wavelet,:,:] = eigenvectors
-                        #else:
-                        #    print("-")
-                    #glitch eigenvectors
-                    if n_glitch!=0:
-                        eigen_glitch = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,i], n_wavelet=n_glitch, dim=6, offset=n_wavelet*10)
-                        #print("Eigen glitch")
-                        if np.all(eigen_glitch):
-                            #print("+")
-                            #print(eigen_glitch)
-                            eig_glitch[j,:n_glitch,:,:] = eigen_glitch
-                        #else:
-                        #    print("-")
-                        #    print(eigen_glitch)
-                    #RN+GWB eigenvectors
-                    if include_gwb:
-                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,i], n_wavelet=1, dim=3, offset=n_wavelet*10+n_glitch*6+num_per_psr_params)
-                    else:
-                        eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=1/betas[j,i], n_wavelet=1, dim=2, offset=n_wavelet*10+n_glitch*6+num_per_psr_params)
-                    #print("Eigen RN+GWB")
-                    if np.all(eigvec_rn):
-                        #print("+")
-                        #print(eigvec_rn)
-                        eig_gwb_rn[j,:,:] = eigvec_rn[0,:,:]
-                    #else:
-                    #    print("-")
-
-            elif samples[0,i,0]!=0:
-                n_wavelet = get_n_wavelet(samples, 0, i)
-                n_glitch = get_n_glitch(samples, 0, i)
+            for j in range(max_j):
+                n_wavelet = get_n_wavelet(samples, j, i)
+                n_glitch = get_n_glitch(samples, j, i)
                 if include_gwb:
                     gwb_on = get_gwb_on(samples, j, i, max_n_wavelet, max_n_glitch, num_noise_params)
                 else:
                     gwb_on = 0
-                eigenvectors = get_fisher_eigenvectors(strip_samples(samples, 0, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[0,i], n_wavelet=n_wavelet)
-                #check if eigenvector calculation was succesful
-                #if not, we just keep the initialized eig full of 0.1 values              
-                if np.all(eigenvectors):
-                    eig[0,:n_wavelet,:,:] = eigenvectors
+
+                #wavelet eigenvectors
+                if n_wavelet!=0:
+                    eigenvectors = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,i], n_wavelet=n_wavelet)
+                    if np.all(eigenvectors):
+                        eig[j,:n_wavelet,:,:] = eigenvectors
+                
+                #glitch eigenvectors
+                if n_glitch!=0:
+                    eigen_glitch = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,i], n_wavelet=n_glitch, dim=6, offset=n_wavelet*10)
+                    if np.all(eigen_glitch):
+                        eig_glitch[j,:n_glitch,:,:] = eigen_glitch
+                
+                #RN+GWB eigenvectors
+                if include_gwb:
+                    eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,i], n_wavelet=1, dim=3, offset=n_wavelet*10+n_glitch*6+num_per_psr_params)
+                else:
+                    eigvec_rn = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][0], T_chain=1/betas[j,i], n_wavelet=1, dim=2, offset=n_wavelet*10+n_glitch*6+num_per_psr_params)
+                if np.all(eigvec_rn):
+                    eig_gwb_rn[j,:,:] = eigvec_rn[0,:,:]
+                
+                #per PSR eigenvectors
+                per_psr_eigvec = get_fisher_eigenvectors(strip_samples(samples, j, i, n_wavelet, max_n_wavelet, n_glitch, max_n_glitch), ptas[n_wavelet][n_glitch][gwb_on], T_chain=1/betas[j,0], n_wavelet=1, dim=num_per_psr_params, offset=n_wavelet*10+n_glitch*6)
+                if np.all(per_psr_eigvec):
+                    eig_per_psr[j,:,:] = per_psr_eigvec[0,:,:]
+
         ###########################################################
         #
         #Do the actual MCMC step
