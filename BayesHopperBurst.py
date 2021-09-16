@@ -1624,6 +1624,8 @@ def get_fisher_eigenvectors(params, pta, T_chain=1, epsilon=1e-4, n_wavelet=1, d
             FISHER = np.where(np.isfinite(fisher[k,:,:]) * (fisher[k,:,:]!=0.0), fisher[k,:,:], 1.0)
             if not np.array_equal(FISHER, fisher[k,:,:]):
                 print("Changed some nan elements in the Fisher matrix to 1.0")
+                print(fisher[k,:,:])
+                print(FISHER)
 
             #Find eigenvalues and eigenvectors of the Fisher matrix
             w, v = np.linalg.eig(FISHER)
