@@ -24,6 +24,9 @@ from enterprise_extensions.frequentist import Fe_statistic
 import enterprise_wavelets as models
 import pickle
 
+import shutil
+import os
+
 ################################################################################
 #
 #MAIN MCMC ENGINE
@@ -41,7 +44,7 @@ def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_w
                jupyter_notebook=False, gwb_on_prior=0.5,
                max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
                glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
-               save_every_n=10000, savefile=None, resume_from=None, start_from=None, n_status_update=100, n_fish_update=1000):
+               save_every_n=10000, savefile=None, safe_save=False, resume_from=None, start_from=None, n_status_update=100, n_fish_update=1000):
 
     if num_total_wn_params is None:
         num_total_wn_params = num_wn_params*len(pulsars)
@@ -466,8 +469,16 @@ Tau-scan-proposals: {1:.2f}%\nGlitch tau-scan-proposals: {6:.2f}%\nJumps along F
         #
         ########################################################
         if savefile is not None and i%save_every_n==0 and i!=start_iter:
-            np.savez(savefile, samples=samples[:,:i,:], acc_fraction=acc_fraction, swap_record=swap_record, log_likelihood=log_likelihood[:,:i],
-                     betas=betas[:,:i], PT_acc=PT_acc[:,:i])
+            if not safe_save:
+                np.savez(savefile, samples=samples[:,:i,:], acc_fraction=acc_fraction, swap_record=swap_record, log_likelihood=log_likelihood[:,:i],
+                         betas=betas[:,:i], PT_acc=PT_acc[:,:i])
+            else:
+                #save to temporary file, copy it into permananet file and remove the temp file
+                #prevents the loss of all data if the run is interupted when np.savez is running
+                np.savez(savefile + ".temp.npz", samples=samples[:,:i,:], acc_fraction=acc_fraction, swap_record=swap_record, log_likelihood=log_likelihood[:,:i],
+                         betas=betas[:,:i], PT_acc=PT_acc[:,:i])
+                shutil.copy(savefile + ".temp.npz", savefile)
+                os.remove(savefile + ".temp.npz")
         ########################################################
         #
         #print out run state every n_status_update iterations
