@@ -33,18 +33,18 @@ import os
 #
 ################################################################################
 
-def run_bw_pta(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_wavelet_prior='flat', n_wavelet_start='random', RJ_weight=0, glitch_RJ_weight=0,
-               regular_weight=3, noise_jump_weight=3, PT_swap_weight=1, T_ladder=None, T_dynamic=False, T_dynamic_nu=300, T_dynamic_t0=1000, PT_hist_length=100,
-               tau_scan_proposal_weight=0, tau_scan_file=None, draw_from_prior_weight=0,
-               de_weight=0, prior_recovery=False, wavelet_amp_prior='uniform', gwb_amp_prior='uniform', rn_amp_prior='uniform', per_psr_rn_amp_prior='uniform',
-               gwb_log_amp_range=[-18,-11], rn_log_amp_range=[-18,-11], per_psr_rn_log_amp_range=[-18,-11], wavelet_log_amp_range=[-18,-11],
-               vary_white_noise=False, efac_start=None, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None,
-               include_gwb=False, gwb_switch_weight=0,
-               include_rn=False, vary_rn=False, num_wn_params=1, num_total_wn_params=None, rn_params=[-13.0,1.0], include_per_psr_rn=False, vary_per_psr_rn=False, per_psr_rn_start_file=None,
-               jupyter_notebook=False, gwb_on_prior=0.5,
-               max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
-               glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
-               save_every_n=10000, savefile=None, safe_save=False, resume_from=None, start_from=None, n_status_update=100, n_fish_update=1000):
+def run_bhb(N, T_max, n_chain, pulsars, max_n_wavelet=1, min_n_wavelet=0, n_wavelet_prior='flat', n_wavelet_start='random', RJ_weight=0, glitch_RJ_weight=0,
+            regular_weight=3, noise_jump_weight=3, PT_swap_weight=1, T_ladder=None, T_dynamic=False, T_dynamic_nu=300, T_dynamic_t0=1000, PT_hist_length=100,
+            tau_scan_proposal_weight=0, tau_scan_file=None, draw_from_prior_weight=0,
+            de_weight=0, prior_recovery=False, wavelet_amp_prior='uniform', gwb_amp_prior='uniform', rn_amp_prior='uniform', per_psr_rn_amp_prior='uniform',
+            gwb_log_amp_range=[-18,-11], rn_log_amp_range=[-18,-11], per_psr_rn_log_amp_range=[-18,-11], wavelet_log_amp_range=[-18,-11],
+            vary_white_noise=False, efac_start=None, include_equad_ecorr=False, wn_backend_selection=False, noisedict_file=None,
+            include_gwb=False, gwb_switch_weight=0,
+            include_rn=False, vary_rn=False, num_wn_params=1, num_total_wn_params=None, rn_params=[-13.0,1.0], include_per_psr_rn=False, vary_per_psr_rn=False, per_psr_rn_start_file=None,
+            jupyter_notebook=False, gwb_on_prior=0.5,
+            max_n_glitch=1, glitch_amp_prior='uniform', glitch_log_amp_range=[-18, -11], n_glitch_prior='flat', n_glitch_start='random', t0_min=0.0, t0_max=10.0, tref=53000*86400,
+            glitch_tau_scan_proposal_weight=0, glitch_tau_scan_file=None, TF_prior_file=None, f0_min=3.5e-9, f0_max=1e-7,
+            save_every_n=10000, savefile=None, safe_save=False, resume_from=None, start_from=None, n_status_update=100, n_fish_update=1000):
 
     if num_total_wn_params is None:
         num_total_wn_params = num_wn_params*len(pulsars)
@@ -1415,9 +1415,23 @@ def regular_jump(n_chain, max_n_wavelet, max_n_glitch, ptas, samples, i, betas, 
         #    print(samples_current)
         #    print(new_point)
 
+        #check if we are inside prior before calling likelihood, otherwise it throws an error
+        new_log_prior = ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
+        if new_log_prior==-np.inf: #check if prior is -inf - reject step if it is
+            samples[j,i+1,:] = samples[j,i,:]
+            a_no[6,j] += 1
+            log_likelihood[j,i+1] = log_likelihood[j,i]
+            continue
+
+        #print(j)
+        #print(n_wavelet, n_glitch, gwb_on)
+        #print(ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point))
+        #print(ptas[n_wavelet][n_glitch][gwb_on].params)
+        #print(new_point)
+        #print(new_point-samples_current)
         log_L = ptas[n_wavelet][n_glitch][gwb_on].get_lnlikelihood(new_point)
         log_acc_ratio = log_L*betas[j,i]
-        log_acc_ratio += ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(new_point)
+        log_acc_ratio += new_log_prior
         log_acc_ratio += -log_likelihood[j,i]*betas[j,i]
         log_acc_ratio += -ptas[n_wavelet][n_glitch][gwb_on].get_lnprior(samples_current)
 
